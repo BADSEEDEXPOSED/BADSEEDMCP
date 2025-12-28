@@ -4,7 +4,7 @@
 import { schedule } from '@netlify/functions';
 import { BadSeedCortex } from '../../lib/cortex.js';
 
-const handler = async (event) => {
+const myHandler = async (event) => {
     // 1. Initialize Cortex
     const cortex = new BadSeedCortex();
 
@@ -28,10 +28,6 @@ const handler = async (event) => {
     }
 };
 
-// Schedule: Run every 10 minutes (example)
-// Cron: "*/10 * * * *" means "Every 10th minute"
-export const config = {
-    schedule: "*/10 * * * *"
-};
-
-export { handler };
+// Schedule: Run every 10 minutes
+// export const handler = schedule("*/10 * * * *", fn);
+export const handler = schedule("*/10 * * * *", myHandler);
