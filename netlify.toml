@@ -1,0 +1,7 @@
+[build]
+  command = "CI=false echo 'Brain Build Skipped (No Build Step Needed)'"
+  publish = "netlify/functions"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
