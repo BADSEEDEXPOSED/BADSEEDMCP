@@ -633,23 +633,46 @@
                     }
                 });
 
-                // Listen for dynamic registration
                 window.navigator.wallets.on('register', (w) => {
                     console.log("BADSEED CONSOLE: New Wallet Registered:", w.name);
-                    // Optimization: Just re-run refresh if new one appears
                     detected.set(w.name, { name: w.name, provider: w, type: 'standard' });
-                    // We'd need to re-render here, but simplistic approach is fine for now
+                    // Note: In a real reactive app we would re-render. Here we rely on user clicking Refresh or next open.
                 });
             }
 
-            // 2. LEGACY INJECTIONS (The "Guts" of legacy adapters)
-            // We check specific globals that known wallets use.
-            if (window.solana && window.solana.isPhantom) detected.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
-            if (window.solflare && window.solflare.isSolflare) detected.set('Solflare', { name: 'Solflare', provider: window.solflare, type: 'legacy' });
-            if (window.jupiter) detected.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
-            if (window.coinbaseSolana) detected.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
-            if (window.backpack) detected.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
-            if (window.trustwallet) detected.set('Trust', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
+            // 2. LEGACY INJECTIONS (The "Hybrid" Fix)
+            // The official adapter library wraps these globals. We must do the same to "Steal" the functionality.
+
+            // Phantom
+            if (window.solana && window.solana.isPhantom) {
+                detected.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
+            }
+
+            // Jupiter (The critical missing link)
+            if (window.jupiter) {
+                detected.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
+            }
+
+            // Solflare
+            if (window.solflare || (window.solana && window.solana.isSolflare)) {
+                const p = window.solflare || window.solana;
+                detected.set('Solflare', { name: 'Solflare', provider: p, type: 'legacy' });
+            }
+
+            // Backpack
+            if (window.backpack) {
+                detected.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
+            }
+
+            // Coinbase
+            if (window.coinbaseSolana) {
+                detected.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
+            }
+
+            // Trust
+            if (window.trustwallet) {
+                detected.set('Trust Wallet', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
+            }
 
             // 3. RENDER
             if (detected.size === 0) {
@@ -672,7 +695,7 @@
                 btn.style.alignItems = 'center';
                 btn.style.fontFamily = 'Courier New';
 
-                // SVG Icon Placeholder
+                // SVG Icon
                 const iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>`;
 
                 btn.innerHTML = `
@@ -680,7 +703,6 @@
                         ${iconSvg}
                         <span style="font-weight:bold; font-size:14px;">${wallet.name}</span>
                     </div>
-                    <span style="font-size:9px; color:#484;">${wallet.type === 'standard' ? 'STD' : 'INJECTED'}</span>
                 `;
 
                 btn.onclick = () => {
@@ -1184,6 +1206,6 @@
         fetchLogic(); // Load Logic on start
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T02:00 -->
+<!-- FORCE DEPLOY: 2025-12-30T02:15 -->
 
 </html>
