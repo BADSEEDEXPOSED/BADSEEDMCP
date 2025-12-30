@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BADSEED // GOD MODE CONSOLE</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     <script>
         // --- WALLET STANDARD SUPPORT (EARLY BINDING) ---
         // Moved to HEAD to catch events that fire before BODY loads
@@ -1396,8 +1397,62 @@
         setTimeout(refreshWalletList, 500); // Small delay to allow injection
         window.addEventListener('load', () => setTimeout(refreshWalletList, 1000)); // Backup
 
+        // --- SHARED TRANSACTION SENDER (Ported from App.js logic + Retry) ---
+
+        // Polyfill Buffer for browser (needed for transaction deserialization)
+        window.Buffer = window.Buffer || {
+            from: (data, encoding) => {
+                if (encoding === 'base64') {
+                    const bin = atob(data);
+                    const buf = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+                    return buf;
+                }
+                if (encoding === 'utf-8' || encoding === 'utf8') {
+                    return new TextEncoder().encode(data);
+                }
+                if (Array.isArray(data)) return new Uint8Array(data);
+                return data; // assume uint8array
+            }
+        };
+
+        async function sendTransactionWrapper(transaction, connection) {
+            if (!activeProvider) throw new Error("Wallet not connected");
+
+            // Sign and Send with aggressive retry for "Unauthorized"
+            let signature;
+            try {
+                if (activeProvider.signAndSendTransaction) {
+                    const result = await activeProvider.signAndSendTransaction(transaction);
+                    signature = result.signature || result;
+                } else {
+                    throw new Error("Wallet does not support direct signAndSend");
+                }
+            } catch (err) {
+                console.warn("Tx Wrapper Send Failed:", err);
+                const msg = err.message || JSON.stringify(err);
+                if (msg.includes("authorized") || msg.includes("User rejected") || msg.includes("0x0")) {
+                    console.log("Wrapper: AGGRESSIVE RECONNECT...");
+                    try {
+                        if (activeProvider.disconnect) {
+                            try { await activeProvider.disconnect(); } catch (e) { }
+                        }
+                        await activeProvider.connect();
+                        // Retry
+                        const result = await activeProvider.signAndSendTransaction(transaction);
+                        signature = result.signature || result;
+                    } catch (retryErr) {
+                        throw new Error("Retry failed: " + (retryErr.message || "Unknown"));
+                    }
+                } else {
+                    throw err;
+                }
+            }
+            return signature;
+        }
+
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T03:45 -->
+<!-- FORCE DEPLOY: 2025-12-30T03:55 -->
 
 </html>
