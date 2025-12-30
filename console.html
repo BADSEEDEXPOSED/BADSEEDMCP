@@ -601,252 +601,142 @@
             const list = document.getElementById('wallet-list');
             list.innerHTML = '';
 
-            // 0. CHECK ENVIRONMENT (File vs Localhost)
-            if (window.location.protocol === 'file:') {
-                const fileWarn = document.createElement('div');
-                fileWarn.style.background = '#AA5500';
-                fileWarn.style.color = '#fff';
-                fileWarn.style.padding = '8px';
-                fileWarn.style.marginBottom = '10px';
-                fileWarn.style.border = '1px solid #FF8800';
-                fileWarn.innerHTML = `
-                    ⚠️ <strong>RUNNING ON FILE:// PROTOCOL</strong> ⚠️<br>
-                    <span style="font-size:10px;">
-                    Modern extensions (Coinbase, Jupiter) often <strong>BLOCK</strong> file URLs by default.<br>
-                    Even with permissions enabled, they may fail to inject.<br>
-                    <strong>RECOMMENDATION:</strong> Run this on a local server.<br>
-                    (e.g., <code>npx http-server .</code> or <code>python -m http.server</code>)
-                    </span>
-                 `;
-                list.appendChild(fileWarn);
-            }
+            // 0. ENVIRONMENT WARNING (Removed for Localhost parity, but keep check if needed)
+            // User confirmed localhost, so we skip the scary file:// warn for now.
 
-
+            const detectedKeys = new Set();
             const providers = [];
             const seenProviders = new Set();
-            const detectedKeys = new Set();
 
             function addProvider(name, provider, isStandard = false) {
                 if (!provider || seenProviders.has(provider)) return;
                 seenProviders.add(provider);
+                detectedKeys.add(name.toLowerCase());
                 providers.push({ name: name, provider: provider, isStandard: isStandard });
             }
 
-            // 1. WALLET STANDARD ADAPTERS (Modern/Future)
-            // standardAdapters is now a global variable, assumed to be defined elsewhere (e.g., in <head>)
+            // 1. MODERN STANDARD (navigator.wallets) - The "React Adapter" way
+            if (window.navigator && window.navigator.wallets) {
+                const wallets = window.navigator.wallets.get();
+                wallets.forEach(wallet => {
+                    addProvider(wallet.name, wallet, true);
+                });
+                // Listen for future injections
+                window.navigator.wallets.on('register', (wallet) => addProvider(wallet.name, wallet, true));
+            }
+
+            // 1b. LEGACY STANDARD (register-wallet event)
             if (typeof standardAdapters !== 'undefined') {
                 standardAdapters.forEach(adapter => {
                     addProvider(`Standard: ${adapter.name}`, adapter, true);
                 });
             }
 
-
-            // 2. STANDARD INJECTION (window.solana)
-            if (window.solana) {
-                let name = "Legacy Injection";
-                if (window.solana.isPhantom) name = "Phantom";
-                if (window.solana.isBackpack) name = "Backpack";
-                if (window.solana.isSolflare) name = "Solflare";
-                if (window.solana.isGlow) name = "Glow";
-                if (window.solana.isTrust) name = "Trust Wallet";
-                if (window.solana.isCoinbaseWallet) name = "Coinbase Wallet";
-                if (window.solana.isJupiter) name = "Jupiter Wallet";
-
-                addProvider(name, window.solana);
-            }
-
-            // 2b. OVERWRITTEN INJECTION (window.originalSolana)
-            // Sometimes Phantom overwrites Coinbase/Trust. They might hide here.
-            if (window.originalSolana) {
-                let name = "DETECTED HIDDEN WALLET";
-                if (window.originalSolana.isCoinbaseWallet) name = "Coinbase (Hidden)";
-                if (window.originalSolana.isTrust) name = "Trust Wallet (Hidden)";
-
-                addProvider(name, window.originalSolana);
-            }
-
-            // 3. EXPLICIT KNOWN NAMESPACES (Massive List)
-            const knownKeys = [
-                'phantom', 'solflare', 'backpack', 'trustwallet', 'glow', 'slope', 'clover',
-                'coin98', 'solong', 'torus', 'exodus', 'coinbaseSolana', 'braveSolana',
-                'mathwallet', 'bitkeep', 'okxwallet', 'starry', 'nightly', 'spot',
-                'xfi', 'salmon', 'alpha', 'martian', 'rise', 'frontier', 'safepal',
-                'hyperpay', 'tokenpocket', 'onto', 'blocto', 'rabby', 'gamestop',
-                'jupiter', 'jupiterWallet', 'coinbaseWalletExtension', 'coinbaseWallet',
-                'originalSolana', 'trustWallet', 'coinbase'
+            // 2. LEGACY WINDOW INJECTION (window.solana, window.jupiter, etc)
+            const legacyMap = [
+                { key: 'solana', name: 'Phantom', check: p => p.isPhantom },
+                { key: 'solana', name: 'Solflare', check: p => p.isSolflare },
+                { key: 'solana', name: 'Backpack', check: p => p.isBackpack },
+                { key: 'solana', name: 'Trust Wallet', check: p => p.isTrust },
+                { key: 'solana', name: 'Coinbase Wallet', check: p => p.isCoinbaseWallet },
+                { key: 'solana', name: 'Jupiter', check: p => p.isJupiter },
+                { key: 'jupiter', name: 'Jupiter' },
+                { key: 'jupiterWallet', name: 'Jupiter' },
+                { key: 'coinbaseSolana', name: 'Coinbase' },
+                { key: 'coinbaseWallet', name: 'Coinbase' },
+                { key: 'coinbase', name: 'Coinbase' },
+                { key: 'trustwallet', name: 'Trust Wallet' },
+                { key: 'backpack', name: 'Backpack' },
+                { key: 'solflare', name: 'Solflare' }
             ];
 
-            knownKeys.forEach(key => {
-                if (window[key]) {
-                    detectedKeys.add(key);
-                    let p = window[key];
-                    if (p.solana) p = p.solana;
-
-                    // RELAXED CHECK: If the global exists, show it.
-                    let displayName = capitalize(key);
-                    if (key === 'braveSolana') displayName = 'Brave';
-                    if (key === 'coinbaseSolana') displayName = 'Coinbase (Solana)';
-                    if (key === 'coinbaseWalletExtension') displayName = 'Coinbase (Ext)';
-                    if (key === 'coinbaseWallet') displayName = 'Coinbase (Root)';
-                    if (key === 'coinbase') displayName = 'Coinbase (Global)';
-                    if (key === 'xfi') displayName = 'XDEFI';
-                    if (key === 'originalSolana') displayName = 'Original (Hidden)';
-                    if (key === 'trustwallet' || key === 'trustWallet') displayName = 'Trust Wallet';
-                    if (key === 'jupiter' || key === 'jupiterWallet') displayName = 'Jupiter';
-
-                    addProvider(`Legacy: ${displayName}`, p);
+            legacyMap.forEach(item => {
+                if (window[item.key]) {
+                    let p = window[item.key];
+                    if (item.check && !item.check(p)) return; // Skip if specific flag missing
+                    addProvider(item.name, p, false);
                 }
             });
 
-            // 4. ULTRA-AGGRESSIVE DISCOVERY (Heuristic)
-            const ignore = new Set(['solana', 'parent', 'self', 'top', 'frames', 'opener', 'window', 'document', 'external', 'chrome', 'performance', 'console', 'location', 'history', 'navigator', 'screen', 'localStorage', 'sessionStorage', 'customElements', 'styleMedia', 'speechSynthesis', 'crypto', 'indexedDB', 'visualViewport']);
+            // 3. RENDER WALLETS
 
-            Object.keys(window).forEach(key => {
-                if (ignore.has(key) || knownKeys.includes(key)) return;
-                try {
-                    const candidate = window[key];
-                    if (candidate && typeof candidate === 'object') {
-
-                        // Heuristic: Must have connect()
-                        if (typeof candidate.connect === 'function') {
-
-                            // Condition A: Standard Accessors
-                            const hasSign = candidate.signTransaction || candidate.signAndSendTransaction || candidate.signMessage || candidate.request;
-
-                            // Condition B: Naming Convention
-                            const nameMatch = key.toLowerCase().includes('wallet') || key.toLowerCase().includes('sol') || key.toLowerCase().includes('provider');
-
-                            if (hasSign || nameMatch) {
-                                addProvider(`Unknown: ${capitalize(key)}`, candidate);
-                            }
-                        }
-                    }
-                } catch (e) { }
-            });
-
-            // 5. RENDER UNIFIED LIST (Manual + Detected)
-            const majorWallets = [
-                { id: 'phantom', name: 'Phantom', check: ['phantom', 'isPhantom'] },
-                { id: 'solflare', name: 'Solflare', check: ['solflare', 'isSolflare'] },
-                { id: 'jupiter', name: 'Jupiter', check: ['jupiter', 'jupiterWallet', 'isJupiter'] },
-                { id: 'coinbase', name: 'Coinbase', check: ['coinbaseSolana', 'coinbaseWallet', 'coinbase', 'isCoinbaseWallet'] },
-                { id: 'trust', name: 'Trust Wallet', check: ['trustwallet', 'trustWallet', 'isTrust'] },
-                { id: 'backpack', name: 'Backpack', check: ['backpack', 'isBackpack'] }
+            // MAJOR WALLETS (Always show even if manual)
+            const majors = [
+                { id: 'phantom', name: 'Phantom', check: ['solana'] },
+                { id: 'solflare', name: 'Solflare', check: ['solflare', 'solana'] },
+                { id: 'jupiter', name: 'Jupiter', check: ['jupiter', 'jupiterWallet'] },
+                { id: 'coinbase', name: 'Coinbase', check: ['coinbaseSolana', 'coinbaseWallet', 'coinbase'] },
+                { id: 'trust', name: 'Trust Wallet', check: ['trustwallet', 'trustWallet'] },
+                { id: 'backpack', name: 'Backpack', check: ['backpack'] }
             ];
 
-            // Add Major Wallets First
-            majorWallets.forEach(w => {
-                let provider = null;
-                let isDetected = false;
-                let isStandardAdapter = false;
+            majors.forEach(w => {
+                // Find if detected
+                const found = providers.find(p => p.name.toLowerCase().includes(w.name.toLowerCase()));
+                const isDetected = !!found;
+                const provider = found ? found.provider : null;
+                const isStandard = found ? found.isStandard : false;
 
-                // Check Standard Adapters first
-                const stdAdapter = standardAdapters.find(a => a.name.toLowerCase().includes(w.name.toLowerCase()));
-                if (stdAdapter) {
-                    provider = stdAdapter;
-                    isDetected = true;
-                    isStandardAdapter = true;
-                }
-
-                // Check Window Injection
-                if (!provider) {
-                    // Direct Window Key
-                    for (const key of w.check) {
-                        if (window[key]) {
-                            provider = window[key];
-                            // If it's a wrapper, dig for solana
-                            if (provider.solana) provider = provider.solana;
-                            isDetected = true;
-                            break;
-                        }
-                    }
-                }
-
-                // Check window.solana flags
-                if (!provider && window.solana) {
-                    for (const check of w.check) {
-                        if (window.solana[check] === true) {
-                            provider = window.solana;
-                            isDetected = true;
-                            break;
-                        }
-                    }
-                }
-
-                // Check hidden originalSolana Flags
-                if (!provider && window.originalSolana) {
-                    for (const check of w.check) {
-                        if (window.originalSolana[check] === true) {
-                            provider = window.originalSolana;
-                            isDetected = true;
-                            break;
-                        }
-                    }
-                }
-
-                // CREATE BUTTON (Detected or Not)
                 const btn = document.createElement('button');
                 btn.style.width = '100%';
-                btn.style.padding = '12px';
+                btn.style.padding = '12px 15px';
                 btn.style.marginBottom = '8px';
-                btn.style.border = isDetected ? '1px solid #0f0' : '1px solid #444';
+                btn.style.border = isDetected ? '1px solid #0f0' : '1px solid #333';
                 btn.style.background = isDetected ? '#002200' : '#111';
-                btn.style.color = isDetected ? '#0f0' : '#888';
+                btn.style.color = isDetected ? '#0f0' : '#666';
                 btn.style.cursor = 'pointer';
                 btn.style.display = 'flex';
                 btn.style.justifyContent = 'space-between';
                 btn.style.alignItems = 'center';
+                btn.style.fontWeight = 'bold';
+                btn.style.fontSize = '12px';
+
+                // Icon (Emoji approximation)
+                let icon = '🔌';
+                if (w.id === 'phantom') icon = '👻';
+                if (w.id === 'jupiter') icon = '🪐';
+                if (w.id === 'solflare') icon = '☀️';
+                if (w.id === 'coinbase') icon = '🔵';
 
                 btn.innerHTML = `
-                    <span>${w.name.toUpperCase()}</span>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:16px;">${icon}</span>
+                        <span>${w.name}</span>
+                    </div>
                     <span style="font-size:10px; color:${isDetected ? '#0f0' : '#444'}">
-                        ${isDetected ? '● DETECTED' : '○ MANUAL CLICK'}
+                        ${isDetected ? 'DETECTED' : 'MANUAL'}
                     </span>
                 `;
 
                 btn.onclick = () => {
-                    if (provider) {
-                        if (isStandardAdapter) connectStandardWallet(provider);
+                    if (isDetected) {
+                        if (isStandard) connectStandardWallet(provider);
                         else connectSpecificWallet(provider);
                     } else {
-                        // MANUAL PATH (Strict Override)
-                        let targetProvider = null;
+                        // STRICT MANUAL LOGIC
+                        let target = null;
+                        if (w.id === 'jupiter') target = window.jupiter || window.jupiterWallet;
+                        else if (w.id === 'coinbase') target = window.coinbaseSolana || window.coinbaseWallet || window.coinbase;
+                        else if (w.id === 'solflare') target = window.solflare || (window.solana?.isSolflare ? window.solana : null);
+                        else if (w.id === 'phantom') target = window.solana;
 
-                        if (w.id === 'jupiter') targetProvider = window.jupiter || window.jupiterWallet;
-                        else if (w.id === 'coinbase') targetProvider = window.coinbaseSolana || window.coinbaseWallet || window.coinbase;
-                        else if (w.id === 'solflare') targetProvider = window.solflare;
-                        else if (w.id === 'backpack') targetProvider = window.backpack;
-                        else if (w.id === 'trust') targetProvider = window.trustwallet || window.trustWallet;
-                        else if (w.id === 'phantom') targetProvider = window.solana;
-
-                        if (targetProvider) {
-                            console.log("Found late provider:", w.name, targetProvider);
-                            alert(`Found ${w.name}! Connecting...`);
-                            connectSpecificWallet(targetProvider);
+                        if (target) {
+                            alert(`Late Detection: Found ${w.name}! Connecting...`);
+                            connectSpecificWallet(target);
                         } else {
-                            // ERROR: Object Not Found
-                            alert(`❌ ERROR: window.${w.check[0]} is undefined.\n\nThe ${w.name} extension is NOT injecting into this page.\n\nPossible Reasons:\n1. Extension is locked or disabled.\n2. Phantom "Default Wallet" setting is blocking it.\n3. Browser Policy (try refreshing).`);
+                            alert(`❌ ERROR: Could not find ${w.name} provider.\n\nIt is not injected into the window.\nCheck if the extension is enabled.`);
                         }
                     }
                 };
-
                 list.appendChild(btn);
-
-                // Mark as seen so we don't duplicate in "Other" list
-                if (provider) seenProviders.add(provider);
             });
 
-            // 6. RENDER OTHER DETECTED WALLETS (Legacy/Unknown)
-            let otherWalletsFound = false;
+            // 4. RENDER UNKNOWN DETECTED WALLETS
             providers.forEach(p => {
-                // If we already handled it in Major list, skip
-                // (We can't easily equate 'p.provider' to what we found above without complex object checking)
-                // Simplified: Just add them if unrelated to major names AND not already seen
-                const isMajor = majorWallets.some(mw => p.name.toLowerCase().includes(mw.name.toLowerCase()));
-                if (!isMajor && !seenProviders.has(p.provider)) {
-                    otherWalletsFound = true;
+                const isMajor = majors.some(m => p.name.toLowerCase().includes(m.name.toLowerCase()));
+                if (!isMajor) {
                     const btn = document.createElement('button');
-                    btn.innerText = p.name.toUpperCase();
+                    btn.innerText = `Other: ${p.name}`;
                     btn.style.width = '100%';
                     btn.style.padding = '12px';
                     btn.style.marginBottom = '8px';
@@ -855,21 +745,13 @@
                     btn.style.border = '1px solid #0f0';
                     btn.style.cursor = 'pointer';
 
-                    if (p.isStandard) btn.onclick = () => connectStandardWallet(p.provider);
-                    else btn.onclick = () => connectSpecificWallet(p.provider);
-
+                    btn.onclick = () => {
+                        if (p.isStandard) connectStandardWallet(p.provider);
+                        else connectSpecificWallet(p.provider);
+                    };
                     list.appendChild(btn);
                 }
             });
-
-            if (!otherWalletsFound && majorWallets.every(w => !w.isDetected)) { // Check if no major wallets were detected and no other wallets were found
-                if (list.children.length === 1 && list.children[0].id === 'file-warn') { // Only file warning present
-                    list.innerHTML += '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Deep scan found 0 objects with .connect())</span></div>';
-                } else if (list.children.length === majorWallets.length) { // Only major wallet buttons, all undetected
-                    // No additional message needed, the buttons already show "MANUAL CLICK"
-                }
-            }
-
 
             document.getElementById('wallet-modal').style.display = 'block';
         }
@@ -1371,6 +1253,6 @@
         fetchLogic(); // Load Logic on start
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-29T23:10 -->
+<!-- FORCE DEPLOY: 2025-12-30T01:30 -->
 
 </html>
