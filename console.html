@@ -618,6 +618,9 @@
                 if (window.solana.isSolflare) name = "Solflare";
                 if (window.solana.isGlow) name = "Glow";
                 if (window.solana.isTrust) name = "Trust Wallet";
+                if (window.solana.isCoinbaseWallet) name = "Coinbase Wallet";
+                if (window.solana.isJupiter) name = "Jupiter Wallet";
+
                 addProvider(name, window.solana);
             }
 
@@ -628,7 +631,7 @@
                 'mathwallet', 'bitkeep', 'okxwallet', 'starry', 'nightly', 'spot',
                 'xfi', 'salmon', 'alpha', 'martian', 'rise', 'frontier', 'safepal',
                 'hyperpay', 'tokenpocket', 'onto', 'blocto', 'rabby', 'gamestop',
-                'jupiter', 'jupiterWallet', 'coinbaseWalletExtension'
+                'jupiter', 'jupiterWallet', 'coinbaseWalletExtension', 'coinbaseWallet'
             ];
 
             knownKeys.forEach(key => {
@@ -640,8 +643,9 @@
                     // Don't pre-filter by .connect(), just let the user try.
                     let displayName = capitalize(key);
                     if (key === 'braveSolana') displayName = 'Brave';
-                    if (key === 'coinbaseSolana') displayName = 'Coinbase';
+                    if (key === 'coinbaseSolana') displayName = 'Coinbase (Solana)';
                     if (key === 'coinbaseWalletExtension') displayName = 'Coinbase (Ext)';
+                    if (key === 'coinbaseWallet') displayName = 'Coinbase (Root)';
                     if (key === 'xfi') displayName = 'XDEFI';
                     if (key === 'jupiter' || key === 'jupiterWallet') displayName = 'Jupiter';
 
@@ -699,16 +703,55 @@
                 });
             }
 
-            // Add Rescan Button
+            // Add Controls
+            const controlsDiv = document.createElement('div');
+            controlsDiv.style.marginTop = '15px';
+            controlsDiv.style.borderTop = '1px dashed #333';
+            controlsDiv.style.paddingTop = '10px';
+
+            // Rescan
             const rescan = document.createElement('button');
             rescan.innerText = "FORCE RE-SCAN";
             rescan.style.width = '100%';
             rescan.style.padding = '8px';
-            rescan.style.marginTop = '10px';
+            rescan.style.marginBottom = '5px';
             rescan.style.background = '#333';
             rescan.style.color = '#fff';
             rescan.onclick = openWalletSelector;
-            list.appendChild(rescan);
+            controlsDiv.appendChild(rescan);
+
+            // Debug
+            const debugBtn = document.createElement('button');
+            debugBtn.innerText = "SHOW DEBUG INFO";
+            debugBtn.style.width = '100%';
+            debugBtn.style.padding = '5px';
+            debugBtn.style.background = '#000';
+            debugBtn.style.color = '#666';
+            debugBtn.style.fontSize = '10px';
+            debugBtn.onclick = () => {
+                let debugHtml = `<div style="text-align:left; font-size:10px; color:#aaa; max-height:100px; overflow-y:auto;">`;
+                debugHtml += `<strong>WINDOW KEYS CONTAINING "SOL/WALLET":</strong><br>`;
+                const allKeys = Object.keys(window).filter(k => k.toLowerCase().includes('sol') || k.toLowerCase().includes('wallet'));
+                if (allKeys.length === 0) debugHtml += "None found.<br>";
+                else allKeys.forEach(k => debugHtml += `- window.${k}<br>`);
+
+                debugHtml += `<br><strong>WINDOW.SOLANA FLAGS:</strong><br>`;
+                if (window.solana) {
+                    ['isPhantom', 'isBackpack', 'isSolflare', 'isGlow', 'isTrust', 'isCoinbaseWallet', 'isJupiter'].forEach(f => {
+                        if (window.solana[f]) debugHtml += `- ${f}: TRUE<br>`;
+                    });
+                } else {
+                    debugHtml += "window.solana NOT FOUND<br>";
+                }
+                debugHtml += `</div>`;
+                const debugContainer = document.createElement('div');
+                debugContainer.innerHTML = debugHtml;
+                list.appendChild(debugContainer);
+                debugBtn.style.display = 'none';
+            };
+            controlsDiv.appendChild(debugBtn);
+
+            list.appendChild(controlsDiv);
 
             document.getElementById('wallet-modal').style.display = 'block';
         }
