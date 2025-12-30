@@ -1265,9 +1265,15 @@
             const ui = document.getElementById('action-ui');
             ui.style.display = 'block';
             document.getElementById('action-title').innerText = "SEND MESSAGE";
-            document.getElementById('action-input-1').placeholder = "Message";
-            document.getElementById('action-input-2').style.display = 'none';
-            document.getElementById('action-btn').innerText = "SEND (0.001 SOL)";
+
+            // Input 1: Message
+            document.getElementById('action-input-1').placeholder = "Your Message";
+            // Input 2: Amount (SOL) - Default 0.001
+            document.getElementById('action-input-2').style.display = 'block';
+            document.getElementById('action-input-2').placeholder = "Amount (SOL) - Default: 0.001";
+            document.getElementById('action-input-2').value = "0.001";
+
+            document.getElementById('action-btn').innerText = "SEND MESSAGE";
             document.getElementById('action-btn').onclick = executeMessage;
         }
 
@@ -1285,11 +1291,13 @@
 
         async function executeMessage() {
             const memo = document.getElementById('action-input-1').value;
+            let amt = parseFloat(document.getElementById('action-input-2').value);
+
             if (!memo) return alert("Message Empty");
+            if (!amt || isNaN(amt)) amt = 0.001; // Default
 
             try {
-                // Send 0.001 SOL as "Message Fee"
-                await sendSol(0.001, memo);
+                await sendSol(amt, memo);
                 alert("Message Sent.");
                 document.getElementById('action-ui').style.display = 'none';
             } catch (e) { alert("Send Failed: " + e.message); }
@@ -1313,7 +1321,7 @@
             tx.add(SystemProgram.transfer({
                 fromPubkey: walletPubkey,
                 toPubkey: destPubkey,
-                lamports: amount * LAMPORTS_PER_SOL
+                lamports: Math.floor(amount * LAMPORTS_PER_SOL)
             }));
 
             // Memo
@@ -1330,7 +1338,17 @@
             tx.recentBlockhash = blockhash;
             tx.feePayer = walletPubkey;
 
-            const { signature } = await activeProvider.signAndSendTransaction(tx);
+            // HANDLE SIGNING (Legacy vs Standard)
+            let signature;
+            if (activeProvider.signAndSendTransaction) {
+                // Legacy (Phantom, Solflare, Jupiter)
+                const result = await activeProvider.signAndSendTransaction(tx);
+                signature = result.signature || result; // Some return string, some object
+            } else {
+                throw new Error("Wallet does not support direct signAndSend (Standard Adapter pending)");
+            }
+
+            console.log("Tx Sent:", signature);
             await connection.confirmTransaction(signature);
             return signature;
         }
