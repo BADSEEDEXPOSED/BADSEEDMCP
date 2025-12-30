@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BADSEED // GOD MODE CONSOLE</title>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 95vh;
+            overflow: hidden;
+        }
+
+        /* --- LAYOUT --- */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #0f0;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            opacity: 0.7;
+            letter-spacing: 4px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 15px;
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+
+        /* --- HEARTBEAT --- */
+        .heartbeat {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            letter-spacing: 1px;
+            border: 1px solid #111;
+            padding: 5px 10px;
+            background: #050505;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            box-shadow: 0 0 5px #333;
+            transition: all 0.5s ease;
+        }
+
+        /* --- PANELS --- */
+        .panel {
+            border: 1px solid #004400;
+            background: rgba(0, 10, 0, 0.8);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px dashed #004400;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+
+        .panel h3 {
+            margin: 0;
+            font-size: 14px;
+            color: #8f8;
+            text-transform: uppercase;
+        }
+
+        /* --- DATA --- */
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #001100;
+        }
+
+        .label {
+            color: #484;
+        }
+
+        .value {
+            color: #cfc;
+            font-weight: bold;
+        }
+
+        .highlight {
+            color: #ff0;
+            text-shadow: 0 0 5px #aa0;
+        }
+
+        .small-text {
+            font-size: 10px;
+            opacity: 0.7;
+        }
+
+        .divider {
+            height: 1px;
+            background: #003300;
+            margin: 10px 0;
+        }
+
+        /* --- LISTS --- */
+        .scroll-list {
+            overflow-y: auto;
+            flex: 1;
+            font-size: 11px;
+            scrollbar-width: thin;
+            scrollbar-color: #004400 #000;
+        }
+
+        .list-item {
+            padding: 4px 0;
+            border-bottom: 1px solid #001100;
+            color: #8c8;
+        }
+
+        /* --- CONTROLS --- */
+        .controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        button {
+            background: #002200;
+            color: #0f0;
+            border: 1px solid #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            padding: 4px 8px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #0f0;
+            color: #000;
+        }
+
+        .btn-action {
+            border-color: #0ff;
+            color: #0ff;
+        }
+
+        .btn-action:hover {
+            background: #0ff;
+            color: #000;
+        }
+
+        .btn-danger {
+            border-color: #f33;
+            color: #f33;
+        }
+
+        .btn-danger:hover {
+            background: #f00;
+            color: #fff;
+            box-shadow: 0 0 10px #f00;
+        }
+
+        /* --- SENTIMENT BARS & MINI CONTROLS --- */
+        .bar-container {
+            margin-bottom: 8px;
+        }
+
+        .bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #686;
+            margin-bottom: 2px;
+        }
+
+        .bar-track {
+            width: 100%;
+            height: 6px;
+            background: #000500;
+            border: 1px solid #003300;
+        }
+
+        .bar-fill {
+            height: 100%;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .control-panel-mini {
+            margin-top: 15px;
+            border-top: 1px dashed #333;
+            padding-top: 10px;
+        }
+
+        .control-panel-mini h4 {
+            margin: 0 0 5px 0;
+            font-size: 10px;
+            color: #555;
+        }
+
+        .inject-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 10px;
+            color: #aaa;
+        }
+
+        .btn-mini {
+            padding: 1px 4px;
+            font-size: 9px;
+            min-width: 25px;
+        }
+
+        /* --- OVERRIDE TEXTAREA --- */
+        #prophecy-override textarea {
+            background: #050505;
+            color: #0f0;
+            border: 1px solid #0f0;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: 'Courier New';
+            margin-top: 5px;
+            padding: 5px;
+            resize: vertical;
+        }
+
+        /* --- CODE BLOCK --- */
+        .code-block {
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            background: #000500;
+            color: #efe;
+            border: 1px solid #002200;
+            padding: 8px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        /* GLITCH EFFECT (Optional) */
+        @keyframes flicker {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.8;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .status-dot.online {
+            animation: flicker 2s infinite;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="header-left">
+            <div class="title">BAD SEED // GOD MODE</div>
+            <div class="subtitle">SYSTEM OVERWATCH & CONTROL</div>
+        </div>
+        <div class="header-right" style="display:flex; gap:10px; align-items:center;">
+            <button id="wallet-btn" onclick="connectWallet()" style="border-color:#0ff; color:#0ff;">CONNECT
+                WALLET</button>
+            <div class="heartbeat" id="heartbeat-display">
+                <div class="status-dot" id="hb-dot"></div>
+                <span id="hb-text">INITIALIZING...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+
+        <!-- ROW 1: PROPHECY & SENTIMENT -->
+        <div class="panel" style="grid-column: span 8;">
+            <div class="panel-header">
+                <h3>VOICE NODE (PROPHECY)</h3>
+                <div class="controls">
+                    <button class="btn btn-danger" onclick="toggleOverride()">OVERRIDE</button>
+                    <button class="btn btn-action" onclick="forceProphecy()">RE-ROLL AI</button>
+                    <button class="btn btn-action" style="background:#000; border-color:#fff; color:#fff;"
+                        onclick="revealProphecy()">REVEAL</button>
+                    <button onclick="fetchVoice(true)">REFRESH</button>
+                </div>
+            </div>
+
+            <div id="prophecy-display">
+                <div class="data-row">
+                    <span class="label">STATUS:</span>
+                    <span class="value" id="prophecy-status">LOADING...</span>
+                </div>
+                <div class="code-block" id="prophecy-text" style="height:80px; overflow-y:auto;">Fetching from neural
+                    net...</div>
+            </div>
+
+            <div id="prophecy-override"
+                style="display: none; margin-top: 10px; border-top: 1px solid #333; padding-top: 10px;">
+                <div style="font-size:10px; color:#f00; margin-bottom:5px;">WARNING: DIRECT DATABASE OVERWRITE</div>
+                <textarea id="override-text" rows="3" placeholder="ENTER DIVINE WILL..."></textarea>
+                <div style="display:flex; gap:5px; margin-top:5px;">
+                    <button class="btn btn-danger" style="flex:1" onclick="submitOverride()">EXECUTE OVERWRITE</button>
+                    <button onclick="toggleOverride()">CANCEL</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-column: span 4;">
+            <div class="panel-header">
+                <h3>COLLECTIVE PSYCHE</h3>
+                <div class="timestamp" id="sentiment-time">--:--</div>
+            </div>
+
+            <div class="sentiment-bars" id="sentiment-bars" style="margin-top:5px;">
+                <!-- Bars injected by JS -->
+                <div style="font-size:10px; color:#666;">Loading Psychology...</div>
+            </div>
+
+            <div class="control-panel-mini">
+                <h4>EMOTION INJECTION</h4>
+                <div class="inject-row">
+                    <span style="color:#0ff">HOPE</span>
+                    <div>
+                        <button class="btn-mini" onclick="injectEmotion('hope', -1)">-1</button>
+                        <button class="btn-mini btn-action" onclick="injectEmotion('hope', 1)">+1</button>
+                        <button class="btn-mini btn-action" onclick="injectEmotion('hope', 2)">+2</button>
+                    </div>
+                </div>
+                <div class="inject-row">
+                    <span style="color:#0f0">GREED</span>
+                    <div>
+                        <button class="btn-mini" onclick="injectEmotion('greed', -1)">-1</button>
+                        <button class="btn-mini btn-action" onclick="injectEmotion('greed', 1)">+1</button>
+                        <button class="btn-mini btn-action" onclick="injectEmotion('greed', 2)">+2</button>
+                    </div>
+                </div>
+                <div class="inject-row">
+                    <span style="color:#f00">FEAR</span>
+                    <div>
+                        <button class="btn-mini" onclick="injectEmotion('fear', -1)">-1</button>
+                        <button class="btn-mini btn-action" onclick="injectEmotion('fear', 1)">+1</button>
+                        <button class="btn-mini btn-action" onclick="injectEmotion('fear', 2)">+2</button>
+                    </div>
+                </div>
+                <div class="inject-row">
+                    <span style="color:#90f">MYSTERY</span>
+                    <div>
+                        <button class="btn-mini" onclick="injectEmotion('mystery', -1)">-1</button>
+                        <button class="btn-mini btn-action" onclick="injectEmotion('mystery', 1)">+1</button>
+                        <button class="btn-mini btn-action" onclick="injectEmotion('mystery', 2)">+2</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 2: WALLET & ARCHIVE -->
+        <div class="panel" style="grid-column: span 6;">
+            <div class="panel-header">
+                <h3>TREASURY</h3>
+                <div class="timestamp" id="wallet-time" style="font-size:10px; color:#666;">--:--</div>
+            </div>
+            <div class="data-row">
+                <span class="label">ADDRESS:</span>
+                <span class="value small-text">9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr</span>
+            </div>
+            <div class="data-row">
+                <span class="label">BALANCE:</span>
+                <span class="value highlight" id="wallet-balance">...</span>
+            </div>
+            <div class="divider"></div>
+            <h4 style="margin:0 0 5px 0; font-size:10px; color:#666;">RECENT TRANSACTIONS</h4>
+            <div id="wallet-txs" class="scroll-list" style="height: 100px;">
+                <div class="list-item">Loading chain data...</div>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-column: span 6;">
+            <div class="panel-header">
+                <h3>PERMANENT ARCHIVE</h3>
+                <button class="btn btn-action" onclick="forceArchive()">FORCE SAVE</button>
+            </div>
+            <div class="data-row">
+                <span class="label">LAST SNAPSHOT:</span>
+                <span class="value" id="archive-last">...</span>
+            </div>
+            <div class="data-row">
+                <span class="label">PENDING UPLOADS:</span>
+                <span class="value" id="archive-pending">...</span>
+            </div>
+            <div class="data-row">
+                <span class="label">TOTAL HISTORY:</span>
+                <span class="value" id="archive-total">...</span>
+            </div>
+            <div class="divider"></div>
+            <h4 style="margin:0 0 5px 0; font-size:10px; color:#666;">ARCHIVE LOGS</h4>
+            <div id="archive-log" class="scroll-list" style="height: 80px;">
+                <div class="list-item">Syncing...</div>
+            </div>
+        </div>
+
+        <!-- ROW 3: X.COM QUEUE -->
+        <div class="panel" style="grid-column: span 12;">
+            <div class="panel-header">
+                <h3>NEURAL QUEUE (AI MEMORY)</h3>
+                <div class="controls" style="display:flex; align-items:center; gap:10px;">
+                    <span id="queue-timer" style="font-size:10px; color:#aaa;">NEXT POST: --:--:--</span>
+                    <button id="btn-pause" onclick="togglePauseQueue()" style="min-width:60px;">...</button>
+                    <button onclick="fetchQueue()">REFRESH</button>
+                </div>
+            </div>
+            <div id="queue-list" class="scroll-list" style="height: 150px;">
+                <!-- Full Narratives go here -->
+                <div class="list-item">Scanning neural queue...</div>
+            </div>
+        </div>
+
+        <!-- ROW 4: ADMIN LOGIC & ACTIONS -->
+        <div class="panel" style="grid-column: span 8;">
+            <div class="panel-header">
+                <h3>ADMIN: SENTIMENT LOGIC</h3>
+                <div class="controls">
+                    <button onclick="fetchLogic()" class="btn-action">LOAD RULES</button>
+                    <button onclick="saveLogic()" class="btn-danger">SAVE CHANGES</button>
+                </div>
+            </div>
+            <div style="font-size:10px; color:#666; margin-bottom:5px;">Configure how transactions map to emotions.
+                format: JSON</div>
+            <textarea id="logic-editor"
+                style="width:100%; height:120px; background:#000; color:#0f0; border:1px solid #333; font-family:'Consolas','Courier New'; font-size:11px; padding:5px;">// Loading rules...</textarea>
+        </div>
+
+        <div class="panel" style="grid-column: span 4;">
+            <div class="panel-header">
+                <h3>GOD ACTIONS</h3>
+                <span id="wallet-status" style="font-size:10px; color:#666;">NO WALLET</span>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                <button class="btn btn-action" onclick="openSacrifice()" style="padding:10px;">💀 SACRIFICE
+                    (BURN)</button>
+                <button class="btn btn-action" onclick="openMessage()" style="padding:10px;">💬 SEND MESSAGE</button>
+            </div>
+
+            <!-- HIDDEN MODALS (Simple divs for now) -->
+            <div id="action-ui" style="margin-top:15px; border-top:1px dashed #333; padding-top:10px; display:none;">
+                <h4 id="action-title" style="margin:0 0 5px 0;">ACTION</h4>
+                <input id="action-input-1" placeholder="Amount / Memo"
+                    style="width:100%; background:#000; border:1px solid #333; color:#fff; margin-bottom:5px;">
+                <input id="action-input-2" placeholder="Memo (Optional)"
+                    style="width:100%; background:#000; border:1px solid #333; color:#fff; margin-bottom:5px; display:none;">
+                <button id="action-btn" class="btn-danger" style="width:100%;">EXECUTE</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- SCRIPT -->
+    <script>
+        const BASE_URL = "https://badseed.netlify.app/.netlify/functions";
+
+        // --- UTILS ---
+        function getBaseUrl(endpoint) { return `${BASE_URL}/${endpoint}`; }
+        function formatTime(iso) {
+            if (!iso) return "NEVER";
+            const date = new Date(iso);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+
+            if (diff < 60) return `${diff}s ago`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        // --- FETCHERS ---
+
+        async function fetchHeartbeat() {
+            try {
+                const res = await fetch(getBaseUrl('heartbeat-get'));
+                const data = await res.json();
+
+                const dot = document.getElementById('hb-dot');
+                const text = document.getElementById('hb-text');
+
+                if (data.status === 'online') {
+                    dot.style.background = '#0f0';
+                    dot.style.boxShadow = '0 0 10px #0f0';
+                    dot.classList.add('online');
+                    text.innerText = `ONLINE (PULSE: ${formatTime(data.lastPulse)})`;
+                    text.style.color = '#0f0';
+                } else {
+                    dot.style.background = '#f00';
+                    dot.style.boxShadow = '0 0 10px #f00';
+                    dot.classList.remove('online');
+                    text.innerText = `STALLED (${formatTime(data.lastPulse)})`;
+                    text.style.color = '#f00';
+                }
+            } catch (e) {
+                document.getElementById('hb-text').innerText = "DISCONNECTED";
+                document.getElementById('hb-dot').style.background = '#555';
+            }
+        }
+
+        async function fetchSentiment() {
+            try {
+                const res = await fetch(getBaseUrl('sentiment-get'));
+                const data = await res.json();
+
+                // document.getElementById('sentiment-time').innerText = formatTime(data.lastUpdated); 
+
+                // Render Bars
+                const stats = data.sentiments || { hope: 0, greed: 0, fear: 0, mystery: 0 };
+                const total = Math.max(1, Object.values(stats).reduce((a, b) => a + b, 0));
+
+                let html = '';
+                const colors = { hope: '#0ff', greed: '#0f0', fear: '#f00', mystery: '#90f' };
+
+                for (let [key, val] of Object.entries(stats)) {
+                    if (key === 'unknown') continue;
+                    const pct = Math.round((val / total) * 100);
+                    // Ensure bar shows even if small
+                    const width = pct < 5 && val > 0 ? 5 : pct;
+
+                    html += `
+                        <div class="bar-container">
+                            <div class="bar-label">
+                                <span style="color:${colors[key]}">${key.toUpperCase()}</span>
+                                <span>${val} (${pct}%)</span>
+                            </div>
+                            <div class="bar-track">
+                                <div class="bar-fill" style="width: ${width}%; background: ${colors[key]}; box-shadow: 0 0 5px ${colors[key]}"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+                document.getElementById('sentiment-bars').innerHTML = html;
+
+                // Prophecy
+                if (data.prophecy) {
+                    const p = data.prophecy;
+                    const readyText = p.ready ? "READY TO REVEAL" : "INCUBATING";
+                    const forcedText = p.forced ? " [MANUAL OVERRIDE]" : "";
+
+                    document.getElementById('prophecy-status').innerText = readyText + forcedText;
+                    if (p.forced) document.getElementById('prophecy-status').style.color = '#f90';
+                    else document.getElementById('prophecy-status').style.color = p.ready ? '#0f0' : '#484';
+
+                    document.getElementById('prophecy-text').innerText =
+                        p.text ? p.text : "(Awaiting Generation...)";
+                }
+
+            } catch (e) { console.error(e); }
+        }
+
+        async function fetchInject(emotion, val) {
+            try {
+                await fetch(getBaseUrl('sentiment-inject'), {
+                    method: 'POST',
+                    body: JSON.stringify({ [emotion]: val })
+                });
+                fetchSentiment(); // instant update
+            } catch (e) { alert(e.message); }
+        }
+        window.injectEmotion = fetchInject; // Global scope
+
+        async function fetchQueue() {
+            try {
+                // Get Queue
+                const res = await fetch(getBaseUrl('queue-get'));
+                const data = await res.json();
+
+                // Get Pause Status
+                try {
+                    const pRes = await fetch(getBaseUrl('queue-toggle'));
+                    if (pRes.ok) {
+                        const pData = await pRes.json();
+                        const btn = document.getElementById('btn-pause');
+                        if (pData.paused) {
+                            btn.innerText = "RESUME";
+                            btn.className = "btn-action";
+                            btn.style.borderColor = "#0f0";
+                            btn.style.color = "#0f0";
+                            document.getElementById('queue-timer').innerText = "QUEUE PAUSED";
+                            document.getElementById('queue-timer').style.color = "#f90";
+                        } else {
+                            btn.innerText = "PAUSE";
+                            btn.className = "btn-danger";
+                            btn.style.borderColor = "#f00";
+                            btn.style.color = "#f00";
+                            updateNextPostTime();
+                        }
+                    }
+                } catch (e) { console.warn("Pause toggle fetch failed"); }
+
+                const list = document.getElementById('queue-list');
+
+                if (!Array.isArray(data) || data.length === 0) {
+                    list.innerHTML = `<div class="list-item">QUEUE EMPTY - WAITING FOR SEEDS...</div>`;
+                    return;
+                }
+
+                let html = '';
+                data.forEach(item => {
+                    const narrative = item.aiLog ? item.aiLog : "Generating...";
+                    const memo = item.memo || "No Memo";
+
+                    html += `
+                        <div class="list-item" style="border-bottom: 1px dotted #333; padding-bottom: 10px; margin-bottom: 10px;">
+                            <div style="display:flex; justify-content:space-between; color: #666; font-size: 10px; margin-bottom: 4px;">
+                                <span>ID: ${item.id.substring(0, 8)}...</span>
+                                <span>${formatTime(item.createdAt)}</span>
+                            </div>
+                            <div style="color: #bbb; margin-bottom: 4px;">USER: "${memo}"</div>
+                            <div style="color: #0f0; padding-left: 10px; border-left: 2px solid #0f0; font-style:italic;">
+                                AI: "${narrative}"
+                            </div>
+                        </div>
+                    `;
+                });
+                list.innerHTML = html;
+
+            } catch (e) { console.error(e); }
+        }
+
+        async function togglePauseQueue() {
+            const btn = document.getElementById('btn-pause');
+            const isPaused = btn.innerText === "RESUME";
+            const cmd = isPaused ? "resume" : "pause";
+
+            if (!confirm(`${cmd.toUpperCase()} the X.com Queue?`)) return;
+
+            try {
+                await fetch(getBaseUrl('queue-toggle'), {
+                    method: 'POST', body: JSON.stringify({ command: cmd })
+                });
+                fetchQueue(); // refresh status
+            } catch (e) { alert("Toggle Failed"); }
+        }
+
+        function updateNextPostTime() {
+            // Next: 00:00 or 12:00 UTC
+            const now = new Date();
+            const utcHour = now.getUTCHours();
+
+            let target = new Date(now);
+            target.setUTCMinutes(0, 0, 0);
+
+            if (utcHour < 12) {
+                target.setUTCHours(12);
+            } else {
+                target.setUTCDate(target.getUTCDate() + 1);
+                target.setUTCHours(0);
+            }
+
+            const diff = target - now;
+            const h = Math.floor(diff / 3600000);
+            const m = Math.floor((diff % 3600000) / 60000);
+
+            document.getElementById('queue-timer').innerText = `NEXT POST: T-${h}h ${m}m`;
+            document.getElementById('queue-timer').style.color = "#aaa";
+        }
+
+        async function fetchArchive() {
+            try {
+                const res = await fetch(getBaseUrl('archive-get'));
+                const data = await res.json();
+
+                const hist = data.history || [];
+                const last = hist[0];
+
+                if (last) {
+                    document.getElementById('archive-last').innerText = `${last.date} (${formatTime(last.timestamp)})`;
+                } else {
+                    document.getElementById('archive-last').innerText = "NONE";
+                }
+
+                document.getElementById('archive-pending').innerText = data.pending ? data.pending.length : 0;
+                document.getElementById('archive-total').innerText = hist.length;
+
+                // Render List
+                let logHtml = '';
+                hist.slice(0, 5).forEach(h => {
+                    logHtml += `<div class="list-item">
+                        <span style="color:#666">${h.date}</span> 
+                        <a href="https://viewblock.io/arweave/tx/${h.txId}" target="_blank" style="color:#0ff; text-decoration:none;">${h.txId.substring(0, 12)}...</a>
+                        ${h.manual ? '<span style="color:#f90">[MANUAL]</span>' : ''}
+                     </div>`;
+                });
+                document.getElementById('archive-log').innerHTML = logHtml;
+
+            } catch (e) { console.error(e); }
+        }
+
+        async function fetchWallet() {
+            try {
+                const res = await fetch(getBaseUrl('wallet-status'));
+                const data = await res.json();
+                document.getElementById('wallet-balance').innerText = data.balance.toFixed(4) + " SOL";
+                document.getElementById('wallet-time').innerText = new Date().toLocaleTimeString();
+
+                let html = '';
+                if (data.recentParams && data.recentParams.length > 0) {
+                    data.recentParams.forEach(tx => {
+                        html += `<div class="list-item">
+                            <span style="color:#0f0">${tx.signature.substring(0, 8)}...</span>
+                            <span style="color:#fff">"${tx.memo || ''}"</span>
+                        </div>`;
+                    });
+                } else {
+                    html = '<div class="list-item">No recent activity</div>';
+                }
+
+                document.getElementById('wallet-txs').innerHTML = html;
+            } catch (e) { }
+        }
+
+
+        // --- ACTIONS ---
+
+        window.toggleOverride = () => {
+            const el = document.getElementById('prophecy-override');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        };
+
+        window.submitOverride = async () => {
+            const text = document.getElementById('override-text').value;
+            if (!text) return;
+            if (!confirm("ARE YOU SURE? This will overwrite the database immediately.")) return;
+
+            try {
+                await fetch(getBaseUrl('prophecy-set'), {
+                    method: 'POST', body: JSON.stringify({ text })
+                });
+                document.getElementById('override-text').value = '';
+                toggleOverride();
+                fetchSentiment(); // refresh
+                alert("OVERWRITE SUCCESSFUL.");
+            } catch (e) { alert("Override Failed: " + e.message); }
+        };
+
+        window.forceProphecy = async () => {
+            if (!confirm("Re-roll Prophecy with current stats?")) return;
+            await fetch(getBaseUrl('manual-trigger-prophecy'));
+            alert("Ordering AI generation...");
+            setTimeout(fetchSentiment, 3000);
+        };
+
+        window.revealProphecy = async () => {
+            if (!confirm("Post Prophecy to X.com NOW?")) return;
+            await fetch(getBaseUrl('prophecy-reveal'));
+            alert("Prophecy Revealed to the world.");
+            setTimeout(fetchSentiment, 2000);
+        };
+
+        window.forceArchive = async () => {
+            if (!confirm("Force Arweave snapshot? Costs SOL.")) return;
+            await fetch(getBaseUrl('manual-trigger-archive'));
+            alert("Archive process started...");
+            setTimeout(fetchArchive, 5000);
+        };
+
+
+        // --- ADMIN LOGIC ---
+        async function fetchLogic() {
+            try {
+                const res = await fetch(getBaseUrl('config-get'));
+                const data = await res.json();
+                document.getElementById('logic-editor').value = JSON.stringify(data.rules, null, 4);
+            } catch (e) { alert("Load Failed: " + e.message); }
+        }
+
+        async function saveLogic() {
+            try {
+                const text = document.getElementById('logic-editor').value;
+                const rules = JSON.parse(text);
+                if (!Array.isArray(rules)) throw new Error("Rules must be an Array");
+
+                await fetch(getBaseUrl('config-set'), {
+                    method: 'POST', body: JSON.stringify({ rules })
+                });
+                alert("Logic Updated Successfully");
+            } catch (e) { alert("Save Failed: " + e.message); }
+        }
+
+        // --- WALLET INTEGRATION ---
+        let userWallet = null;
+
+        async function connectWallet() {
+            if ("solana" in window) {
+                try {
+                    const resp = await window.solana.connect();
+                    userWallet = resp.publicKey.toString();
+                    document.getElementById('wallet-btn').innerText = userWallet.substring(0, 4) + "..." + userWallet.substring(userWallet.length - 4);
+                    document.getElementById('wallet-status').innerText = "CONNECTED";
+                    document.getElementById('wallet-status').style.color = "#0f0";
+                } catch (err) {
+                    alert("User Rejected Connection");
+                }
+            } else {
+                window.open("https://phantom.app/", "_blank");
+            }
+        }
+
+        function openSacrifice() {
+            if (!userWallet) return alert("Connect Wallet First");
+            const ui = document.getElementById('action-ui');
+            ui.style.display = 'block';
+            document.getElementById('action-title').innerText = "SACRIFICE (BURN)";
+            document.getElementById('action-input-1').placeholder = "Amount (SOL)";
+            document.getElementById('action-input-2').style.display = 'block';
+            document.getElementById('action-input-2').placeholder = "Last Words (Memo)";
+            document.getElementById('action-btn').innerText = "BURN IT";
+            document.getElementById('action-btn').onclick = executeSacrifice;
+        }
+
+        function openMessage() {
+            if (!userWallet) return alert("Connect Wallet First");
+            const ui = document.getElementById('action-ui');
+            ui.style.display = 'block';
+            document.getElementById('action-title').innerText = "SEND MESSAGE";
+            document.getElementById('action-input-1').placeholder = "Message";
+            document.getElementById('action-input-2').style.display = 'none';
+            document.getElementById('action-btn').innerText = "SEND (0.001 SOL)";
+            document.getElementById('action-btn').onclick = executeMessage;
+        }
+
+        async function executeSacrifice() {
+            const amt = parseFloat(document.getElementById('action-input-1').value);
+            const memo = document.getElementById('action-input-2').value;
+            if (!amt || isNaN(amt)) return alert("Invalid Amount");
+
+            try {
+                await sendSol(amt, memo);
+                alert("Sacrifice Complete.");
+                document.getElementById('action-ui').style.display = 'none';
+            } catch (e) { alert("Burn Failed: " + e.message); }
+        }
+
+        async function executeMessage() {
+            const memo = document.getElementById('action-input-1').value;
+            if (!memo) return alert("Message Empty");
+
+            try {
+                // Send 0.001 SOL as "Message Fee"
+                await sendSol(0.001, memo);
+                alert("Message Sent.");
+                document.getElementById('action-ui').style.display = 'none';
+            } catch (e) { alert("Send Failed: " + e.message); }
+        }
+
+        async function sendSol(amount, memo) {
+            if (!window.solana || !userWallet) throw new Error("No Wallet");
+
+            // Note: In a raw HTML file without a bundler, we need @solana/web3.js CDN
+            // Assuming window.solanaWeb3 is available from CDN
+            const { Connection, Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL, TransactionInstruction } = solanaWeb3;
+
+            // Use Helius or Public RPC
+            const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
+
+            const destPubkey = new PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
+            const walletPubkey = new PublicKey(userWallet);
+
+            const tx = new Transaction();
+
+            // Transfer
+            tx.add(SystemProgram.transfer({
+                fromPubkey: walletPubkey,
+                toPubkey: destPubkey,
+                lamports: amount * LAMPORTS_PER_SOL
+            }));
+
+            // Memo
+            if (memo) {
+                const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+                tx.add(new TransactionInstruction({
+                    keys: [{ pubkey: walletPubkey, isSigner: true, isWritable: true }],
+                    programId: MEMO_ID,
+                    data: (new TextEncoder()).encode(memo)
+                }));
+            }
+
+            const { blockhash } = await connection.getLatestBlockhash();
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = walletPubkey;
+
+            const { signature } = await window.solana.signAndSendTransaction(tx);
+            await connection.confirmTransaction(signature);
+            return signature;
+        }
+
+        // --- INIT ---
+        function refreshAll() {
+            fetchHeartbeat();
+            fetchSentiment();
+            fetchQueue();
+            fetchArchive();
+            fetchWallet();
+        }
+
+        // Status Loop
+        setInterval(refreshAll, 10000); // 10s
+
+        // Initial
+        refreshAll();
+        fetchLogic(); // Load Logic on start (once)
+
+    </script>
+</body>
+
+</html>
