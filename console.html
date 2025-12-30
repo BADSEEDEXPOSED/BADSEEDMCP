@@ -1543,17 +1543,22 @@
             if (!activeProvider) throw new Error("Wallet not connected");
 
             // Check for Mismatch (Fixes Unauthorized if provider != userWallet)
-            if (activeProvider.publicKey && activeProvider.publicKey.toString() !== userWallet) {
-                console.warn("Wallet Mismatch! Provider:", activeProvider.publicKey.toString(), "User:", userWallet);
+            const providerKey = activeProvider.publicKey.toString();
+            if (activeProvider.publicKey && providerKey !== userWallet) {
+                console.warn(`Wallet Mismatch! Provider: ${providerKey}, User: ${userWallet}`);
                 console.log("Fixing mismatch by reconnecting...");
                 if (activeProvider.disconnect) await activeProvider.disconnect().catch(e => console.log(e));
                 await activeProvider.connect();
             }
 
+            // FORCE FeePayer to match Active Provider (Crucial for Phantom checks)
+            transaction.feePayer = activeProvider.publicKey;
+
             // Sign and Send with aggressive retry for "Unauthorized"
             let signature;
             try {
                 if (activeProvider.signAndSendTransaction) {
+                    console.log("Wrapper: Signing with", activeProvider.publicKey.toString());
                     const result = await activeProvider.signAndSendTransaction(transaction);
                     signature = result.signature || result;
                 } else {
@@ -1569,7 +1574,17 @@
                             try { await activeProvider.disconnect(); } catch (e) { }
                         }
                         await activeProvider.connect();
+
+                        // RE-FORCE FeePayer after reconnect
+                        transaction.feePayer = activeProvider.publicKey;
+
+                        // Update Blockhash (It might have expired during reconnect?)
+                        // Safe to fetch fresh blockhash
+                        const { blockhash } = await connection.getLatestBlockhash();
+                        transaction.recentBlockhash = blockhash;
+
                         // Retry
+                        console.log("Wrapper: Retrying sign with", activeProvider.publicKey.toString());
                         const result = await activeProvider.signAndSendTransaction(transaction);
                         signature = result.signature || result;
                     } catch (retryErr) {
@@ -1584,6 +1599,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T04:30 -->
+<!-- FORCE DEPLOY: 2025-12-30T04:35 -->
 
 </html>
