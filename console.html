@@ -596,6 +596,21 @@
             const list = document.getElementById('wallet-list');
             list.innerHTML = '';
 
+            // HELP / TROUBLESHOOTING TIP
+            const helpDiv = document.createElement('div');
+            helpDiv.style.fontSize = '11px';
+            helpDiv.style.color = '#aaa';
+            helpDiv.style.marginBottom = '10px';
+            helpDiv.style.padding = '8px';
+            helpDiv.style.background = '#220000';
+            helpDiv.style.border = '1px solid #500';
+            helpDiv.innerHTML = `
+                <strong>MISSING WALLETS?</strong><br>
+                1. <strong>Local File Issue:</strong> Go to <code>Manage Extensions > Details</code> and enable <strong>"Allow access to file URLs"</strong> for Coinbase/Jupiter.<br>
+                2. <strong>Phantom Conflict:</strong> Phantom might be hiding them. Check Phantom Settings > Developer Settings > <strong>"Default Wallet"</strong> (Set to "Ask" or "Top").
+            `;
+            list.appendChild(helpDiv);
+
             const providers = [];
             const seenProviders = new Set();
 
