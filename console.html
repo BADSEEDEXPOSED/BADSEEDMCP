@@ -1249,15 +1249,30 @@
 
 
         // --- ACTION HANDLERS ---
+        let sacrificeInputMint = "So11111111111111111111111111111111111111112"; // SOL Default
+        const BADSEED_MINT = "YourBadSeedMintAddressHere_NeedToFindItFromEnvOrConfig";
+        // Actually, let's hardcode the mint from the other file if possible, or Ask User.
+        // Found in serialization.js? No, that was program ID.
+        // Let's use a placeholder and ask user to confirm/edit?
+        // Better: Use a known constant for BADSEED if I have it.
+        const BADSEED_MINT = "3HPpMLK7LjKFqSnCsBYNiijhNTo7dkkx3FCSAHKSpump";
+        const SOL_MINT = "So11111111111111111111111111111111111111112";
+
         function openSacrifice() {
             if (!userWallet) return openWalletSelector();
             const ui = document.getElementById('action-ui');
             ui.style.display = 'block';
-            document.getElementById('action-title').innerText = "SACRIFICE (BURN)";
-            document.getElementById('action-input-1').placeholder = "Amount (SOL)";
+            document.getElementById('action-title').innerText = "SACRIFICE (SWAP)";
+
+            // Input 1: Amount
+            document.getElementById('action-input-1').placeholder = "Amount (e.g. 0.01)";
+
+            // Input 2: Input Mint (Default SOL)
             document.getElementById('action-input-2').style.display = 'block';
-            document.getElementById('action-input-2').placeholder = "Last Words (Memo)";
-            document.getElementById('action-btn').innerText = "BURN IT";
+            document.getElementById('action-input-2').placeholder = "Input Mint (Default: SOL)";
+            document.getElementById('action-input-2').value = SOL_MINT;
+
+            document.getElementById('action-btn').innerText = "SACRIFICE (SWAP TO BURN)";
             document.getElementById('action-btn').onclick = executeSacrifice;
         }
 
@@ -1266,43 +1281,74 @@
             const ui = document.getElementById('action-ui');
             ui.style.display = 'block';
             document.getElementById('action-title').innerText = "SEND MESSAGE";
-
-            // Input 1: Message
             document.getElementById('action-input-1').placeholder = "Your Message";
-            // Input 2: Amount (SOL) - Default 0.001
             document.getElementById('action-input-2').style.display = 'block';
             document.getElementById('action-input-2').placeholder = "Amount (SOL) - Default: 0.001";
             document.getElementById('action-input-2').value = "0.001";
-
             document.getElementById('action-btn').innerText = "SEND MESSAGE";
             document.getElementById('action-btn').onclick = executeMessage;
         }
 
         async function executeSacrifice() {
-            const amt = parseFloat(document.getElementById('action-input-1').value);
-            const memo = document.getElementById('action-input-2').value;
+            const amtStr = document.getElementById('action-input-1').value;
+            const inputMint = document.getElementById('action-input-2').value.trim() || SOL_MINT;
+            const amt = parseFloat(amtStr);
+
             if (!amt || isNaN(amt)) return alert("Invalid Amount");
 
+            // MVP: Assuming 9 decimals (SOL).
+            const decimals = 9;
+            const atomicAmount = Math.floor(amt * Math.pow(10, decimals));
+
             try {
-                await sendSol(amt, memo);
-                alert("Sacrifice Complete.");
+                // 1. Quote
+                console.log("Quoting", amt, "of", inputMint, "to", BADSEED_MINT);
+                const quote = await getJupiterQuote(inputMint, BADSEED_MINT, atomicAmount);
+                if (quote.error) throw new Error("Quote Error: " + quote.error);
+
+                // 2. Instructions
+                const swapRes = await getJupiterSwapInstructions(quote, userWallet);
+
+                // 3. Build Tx
+                const { Transaction } = solanaWeb3;
+                const tx = new Transaction();
+
+                // Add instructions in order
+                if (swapRes.computeBudgetInstructions) swapRes.computeBudgetInstructions.forEach(ix => tx.add(deserializeInstruction(ix)));
+                if (swapRes.setupInstructions) swapRes.setupInstructions.forEach(ix => tx.add(deserializeInstruction(ix)));
+                tx.add(deserializeInstruction(swapRes.swapInstruction));
+                if (swapRes.cleanupInstruction) tx.add(deserializeInstruction(swapRes.cleanupInstruction));
+
+                // 4. Send
+                const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
+                const { blockhash } = await connection.getLatestBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.feePayer = new solanaWeb3.PublicKey(userWallet);
+
+                const signature = await sendTransactionWrapper(tx, connection);
+                console.log("Sacrifice Sent:", signature);
+                alert("Sacrifice Sent! " + signature);
                 document.getElementById('action-ui').style.display = 'none';
-            } catch (e) { alert("Burn Failed: " + e.message); }
+
+            } catch (e) {
+                console.error(e);
+                alert("Sacrifice Failed: " + e.message);
+            }
         }
 
         async function executeMessage() {
             const memo = document.getElementById('action-input-1').value;
             let amt = parseFloat(document.getElementById('action-input-2').value);
-
             if (!memo) return alert("Message Empty");
             if (!amt || isNaN(amt)) amt = 0.001; // Default
-
             try {
                 await sendSol(amt, memo);
                 alert("Message Sent.");
                 document.getElementById('action-ui').style.display = 'none';
             } catch (e) { alert("Send Failed: " + e.message); }
         }
+
+        // MOVED sendSol to avoid duplication/confusion (it's below)
 
         async function sendSol(amount, memo) {
             if (!activeProvider || !userWallet) throw new Error("No Wallet");
@@ -1543,6 +1589,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T04:15 -->
+<!-- FORCE DEPLOY: 2025-12-30T04:20 -->
 
 </html>
