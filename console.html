@@ -642,7 +642,7 @@
                 'xfi', 'salmon', 'alpha', 'martian', 'rise', 'frontier', 'safepal',
                 'hyperpay', 'tokenpocket', 'onto', 'blocto', 'rabby', 'gamestop',
                 'jupiter', 'jupiterWallet', 'coinbaseWalletExtension', 'coinbaseWallet',
-                'originalSolana', 'trustWallet'
+                'originalSolana', 'trustWallet', 'coinbase'
             ];
 
             knownKeys.forEach(key => {
@@ -656,6 +656,7 @@
                     if (key === 'coinbaseSolana') displayName = 'Coinbase (Solana)';
                     if (key === 'coinbaseWalletExtension') displayName = 'Coinbase (Ext)';
                     if (key === 'coinbaseWallet') displayName = 'Coinbase (Root)';
+                    if (key === 'coinbase') displayName = 'Coinbase (Global)';
                     if (key === 'xfi') displayName = 'XDEFI';
                     if (key === 'originalSolana') displayName = 'Original (Hidden)';
                     if (key === 'trustwallet' || key === 'trustWallet') displayName = 'Trust Wallet';
@@ -747,8 +748,14 @@
                 if (standardAdapters.length === 0) debugHtml += "None (Event never fired).<br>";
                 else standardAdapters.forEach(a => debugHtml += `- ${a.name}<br>`);
 
-                debugHtml += `<br><strong>WINDOW KEYS CONTAINING "SOL/WALLET":</strong><br>`;
-                const allKeys = Object.keys(window).filter(k => k.toLowerCase().includes('sol') || k.toLowerCase().includes('wallet'));
+                debugHtml += `<br><strong>WINDOW KEYS CONTAINING "SOL/WALLET/COINBASE/JUPITER":</strong><br>`;
+                const allKeys = Object.keys(window).filter(k =>
+                    k.toLowerCase().includes('sol') ||
+                    k.toLowerCase().includes('wallet') ||
+                    k.toLowerCase().includes('coinbase') ||
+                    k.toLowerCase().includes('jupiter')
+                );
+
                 if (allKeys.length === 0) debugHtml += "None found.<br>";
                 else allKeys.forEach(k => debugHtml += `- window.${k}<br>`);
 
