@@ -591,20 +591,18 @@
             } catch (e) { return "ERROR"; }
         }
 
-        // --- WALLET SUPPORT (OFFICIAL ADAPTER LOGIC MIMIC) ---
+        // --- WALLET SUPPORT (FULL PARITY: AUTO-CONNECT + PERSISTENCE) ---
 
-        // Polling interval for wallet injection
-        let walletInterval = null;
+        let userWallet = null;
+        let activeProvider = null;
+        let isAutoConnecting = false;
 
         function openWalletSelector() {
             const list = document.getElementById('wallet-list');
-            list.innerHTML = '<div style="color:#666; font-size:10px; padding:10px;">Scanning for wallets... (Standard Mode)</div>';
+            list.innerHTML = '<div style="color:#666; font-size:10px; padding:10px;">Scanning for wallets...</div>';
             document.getElementById('wallet-modal').style.display = 'block';
-
-            // Start polling for wallets (mimics React Adapter's behavior)
             refreshWalletList();
 
-            // Allow manual refresh
             if (!document.getElementById('scan-btn')) {
                 const scanBtn = document.createElement('button');
                 scanBtn.id = 'scan-btn';
@@ -620,137 +618,160 @@
             const list = document.getElementById('wallet-list');
             list.innerHTML = '';
 
-            const detected = new Map(); // Name -> Provider info
+            const detected = new Map();
 
             // 1. MODERN STANDARD (navigator.wallets)
             if (window.navigator && window.navigator.wallets) {
                 const wallets = window.navigator.wallets.get();
-                console.log("BADSEED CONSOLE: Standard Wallets Found:", wallets);
-
                 wallets.forEach(w => {
-                    if (!detected.has(w.name)) {
-                        detected.set(w.name, { name: w.name, provider: w, type: 'standard' });
-                    }
+                    if (!detected.has(w.name)) detected.set(w.name, { name: w.name, provider: w, type: 'standard' });
                 });
-
                 window.navigator.wallets.on('register', (w) => {
-                    console.log("BADSEED CONSOLE: New Wallet Registered:", w.name);
                     detected.set(w.name, { name: w.name, provider: w, type: 'standard' });
-                    // Note: In a real reactive app we would re-render. Here we rely on user clicking Refresh or next open.
+                    // Try auto-connect if late arrival
+                    attemptAutoConnect(detected);
                 });
             }
 
-            // 2. LEGACY INJECTIONS (The "Hybrid" Fix)
-            // The official adapter library wraps these globals. We must do the same to "Steal" the functionality.
-
-            // Phantom
-            if (window.solana && window.solana.isPhantom) {
-                detected.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
-            }
-
-            // Jupiter (The critical missing link)
-            if (window.jupiter) {
-                detected.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
-            }
-
-            // Solflare
-            if (window.solflare || (window.solana && window.solana.isSolflare)) {
-                const p = window.solflare || window.solana;
-                detected.set('Solflare', { name: 'Solflare', provider: p, type: 'legacy' });
-            }
-
-            // Backpack
-            if (window.backpack) {
-                detected.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
-            }
-
-            // Coinbase
-            if (window.coinbaseSolana) {
-                detected.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
-            }
-
-            // Trust
-            if (window.trustwallet) {
-                detected.set('Trust Wallet', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
-            }
+            // 2. LEGACY INJECTIONS
+            if (window.solana && window.solana.isPhantom) detected.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
+            if (window.jupiter) detected.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
+            if (window.solflare || (window.solana && window.solana.isSolflare)) detected.set('Solflare', { name: 'Solflare', provider: window.solflare || window.solana, type: 'legacy' });
+            if (window.backpack) detected.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
+            if (window.coinbaseSolana) detected.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
+            if (window.trustwallet) detected.set('Trust Wallet', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
 
             // 3. RENDER
             if (detected.size === 0) {
-                list.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No Solana Wallets Found.<br>Please install Phantom, Solflare, or Jupiter.</div>';
+                list.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No Wallets Found.</div>';
+            } else {
+                detected.forEach((wallet) => {
+                    const btn = document.createElement('button');
+                    btn.style.width = '100%';
+                    btn.style.marginBottom = '8px';
+                    btn.style.padding = '12px';
+                    btn.style.background = '#002200';
+                    btn.style.border = '1px solid #0f0';
+                    btn.style.color = '#0f0';
+                    btn.style.cursor = 'pointer';
+                    btn.style.display = 'flex';
+                    btn.style.justifyContent = 'space-between';
+                    btn.style.alignItems = 'center';
+                    btn.style.fontFamily = 'Courier New';
 
-                return;
+                    const iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>`;
+                    btn.innerHTML = `<div style="display:flex; align-items:center; gap:10px;">${iconSvg}<span style="font-weight:bold; font-size:14px;">${wallet.name}</span></div><span style="font-size:9px; color:#484;">${wallet.type === 'standard' ? 'STD' : 'LEGACY'}</span>`;
+
+                    btn.onclick = () => {
+                        if (wallet.type === 'standard') connectStandardWallet(wallet);
+                        else connectLegacyWallet(wallet);
+                    };
+                    list.appendChild(btn);
+                });
             }
 
-            detected.forEach((wallet) => {
-                const btn = document.createElement('button');
-                btn.style.width = '100%';
-                btn.style.marginBottom = '8px';
-                btn.style.padding = '12px';
-                btn.style.background = '#002200';
-                btn.style.border = '1px solid #0f0';
-                btn.style.color = '#0f0';
-                btn.style.cursor = 'pointer';
-                btn.style.display = 'flex';
-                btn.style.justifyContent = 'space-between';
-                btn.style.alignItems = 'center';
-                btn.style.fontFamily = 'Courier New';
-
-                // SVG Icon
-                const iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>`;
-
-                btn.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        ${iconSvg}
-                        <span style="font-weight:bold; font-size:14px;">${wallet.name}</span>
-                    </div>
-                `;
-
-                btn.onclick = () => {
-                    if (wallet.type === 'standard') connectStandardWallet(wallet.provider);
-                    else connectSpecificWallet(wallet.provider);
-                };
-                list.appendChild(btn);
-            });
+            // 4. CHECK AUTO-CONNECT (Only runs once ideally, logic handled inside)
+            attemptAutoConnect(detected);
         }
 
-        async function connectStandardWallet(adapter) {
+        // AUTO-CONNECT LOGIC
+        function attemptAutoConnect(detectedMap) {
+            if (userWallet) return; // Already connected
+            const savedName = localStorage.getItem('walletName');
+            if (savedName && detectedMap.has(savedName)) {
+                console.log("Auto-Connecting to " + savedName);
+                const wallet = detectedMap.get(savedName);
+                if (wallet.type === 'standard') connectStandardWallet(wallet, true);
+                else connectLegacyWallet(wallet, true);
+            }
+        }
+
+        async function connectStandardWallet(walletStruct, silent = false) {
             try {
+                const adapter = walletStruct.provider;
                 await adapter.connect();
                 const pubKey = adapter.publicKey.toString();
+                handleConnectionSuccess(walletStruct.name, adapter, pubKey);
 
-                userWallet = pubKey;
-                // Standard adapters have different API for signing?
-                // Actually most map 'signAndSendTransaction' or we use adapter.signIn()
-                // For this simple console, we wrap it or treat it as provider if API matches.
-                // Standard Adapter API: adapter.connect(), adapter.signTransaction(), adapter.signAndSendTransaction()
-                // It usually matches.
-                activeProvider = adapter;
-
-                updateWalletUI(pubKey);
-            } catch (e) { alert("Standard Connection Failed: " + e.message); }
+                // Setup Standard Events (If supported by adapter interface)
+                // Most standard adapters expose 'on' for 'disconnect' etc.
+                if (adapter.on) {
+                    adapter.on('disconnect', handleDisconnect);
+                    adapter.on('accountChanged', (pk) => {
+                        if (pk) handleConnectionSuccess(walletStruct.name, adapter, pk.toString());
+                        else handleDisconnect();
+                    });
+                }
+            } catch (e) {
+                if (!silent) alert("Connection Failed: " + e.message);
+                console.error(e);
+            }
         }
 
-        async function connectSpecificWallet(provider) {
+        async function connectLegacyWallet(walletStruct, silent = false) {
             try {
-                const resp = await provider.connect();
+                const provider = walletStruct.provider;
+                // Legacy providers often allow silent connect via { onlyIfTrusted: true } for auto-connect
+                const opts = silent ? { onlyIfTrusted: true } : {};
+
+                // Some ignore opts, but Phantom supports onlyIfTrusted
+                const resp = await provider.connect(opts);
+
                 let pubKey = null;
                 if (resp && resp.publicKey) pubKey = resp.publicKey.toString();
                 else if (provider.publicKey) pubKey = provider.publicKey.toString();
 
-                if (!pubKey) throw new Error("Could not retrieve Public Key");
+                if (!pubKey) throw new Error("No Public Key");
 
-                userWallet = pubKey;
-                activeProvider = provider;
+                handleConnectionSuccess(walletStruct.name, provider, pubKey);
 
-                updateWalletUI(pubKey);
+                // Legacy Events
+                if (provider.on) {
+                    provider.on('disconnect', handleDisconnect);
+                    provider.on('accountChanged', (pk) => {
+                        if (pk) handleConnectionSuccess(walletStruct.name, provider, pk.toString());
+                        else handleDisconnect();
+                    });
+                }
 
             } catch (err) {
-                alert("Connection Failed: " + err.message);
+                if (!silent) {
+                    // If silent fail (auto-connect), we just don't connect. User must click manually.
+                    if (err.message.includes("User rejected") || !silent) alert("Connection Failed: " + err.message);
+                }
+                console.warn("Auto-connect trust check failed or rejected", err);
             }
         }
 
+        function handleConnectionSuccess(name, provider, pubKey) {
+            userWallet = pubKey;
+            activeProvider = provider;
+            localStorage.setItem('walletName', name); // PERSIST
+
+            updateWalletUI(pubKey);
+            console.log("Connected to " + name, pubKey);
+        }
+
+        function handleDisconnect() {
+            userWallet = null;
+            activeProvider = null;
+            localStorage.removeItem('walletName'); // CLEAR PERSISTENCE
+
+            document.getElementById('wallet-btn').innerText = "CONNECT WALLET";
+            document.getElementById('wallet-status').innerText = "NO WALLET";
+            document.getElementById('wallet-status').style.color = "#666";
+            console.log("Disconnected");
+        }
+
         function updateWalletUI(pubKey) {
-            document.getElementById('wallet-btn').innerText = pubKey.substring(0, 4) + "..." + pubKey.substring(pubKey.length - 4);
+            const short = pubKey.substring(0, 4) + "..." + pubKey.substring(pubKey.length - 4);
+            const btn = document.getElementById('wallet-btn');
+            btn.innerText = short;
+            btn.onclick = () => {
+                if (confirm("Disconnect Wallet?")) handleDisconnect();
+                else openWalletSelector();
+            };
+
             document.getElementById('wallet-status').innerText = "CONNECTED";
             document.getElementById('wallet-status').style.color = "#0f0";
             document.getElementById('wallet-modal').style.display = 'none';
@@ -1204,8 +1225,13 @@
         setInterval(refreshAll, 10000); // 10s
         refreshAll();
         fetchLogic(); // Load Logic on start
+
+        // Start Wallet Polling Immediately (Auto-Connect)
+        setTimeout(refreshWalletList, 500); // Small delay to allow injection
+        window.addEventListener('load', () => setTimeout(refreshWalletList, 1000)); // Backup
+
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T02:15 -->
+<!-- FORCE DEPLOY: 2025-12-30T02:30 -->
 
 </html>
