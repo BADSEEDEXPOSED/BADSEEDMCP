@@ -591,17 +591,24 @@
             } catch (e) { return "ERROR"; }
         }
 
-        // --- WALLET SUPPORT (FULL PARITY: AUTO-CONNECT + PERSISTENCE) ---
+        // --- WALLET SUPPORT (AGGRESSIVE POLLING + JUPITER FIX) ---
 
         let userWallet = null;
         let activeProvider = null;
-        let isAutoConnecting = false;
 
         function openWalletSelector() {
             const list = document.getElementById('wallet-list');
-            list.innerHTML = '<div style="color:#666; font-size:10px; padding:10px;">Scanning for wallets...</div>';
+            list.innerHTML = '<div style="color:#666; font-size:10px; padding:10px;">Scanning for wallets... (Polling)</div>';
             document.getElementById('wallet-modal').style.display = 'block';
+
+            // Aggressive Refresh
             refreshWalletList();
+            let attempts = 0;
+            const poller = setInterval(() => {
+                refreshWalletList();
+                attempts++;
+                if (attempts > 20) clearInterval(poller); // Stop after 10s
+            }, 500);
 
             if (!document.getElementById('scan-btn')) {
                 const scanBtn = document.createElement('button');
@@ -616,35 +623,44 @@
 
         function refreshWalletList() {
             const list = document.getElementById('wallet-list');
-            list.innerHTML = '';
+            // Don't clear if we have items, just append/update? No, simpler to rebuild for now to avoid dupes.
+            // But we want to handle "flicker" if polling.
+            // Let's gather first, then render.
 
             const detected = new Map();
 
-            // 1. MODERN STANDARD (navigator.wallets)
+            // 1. STANDARD
             if (window.navigator && window.navigator.wallets) {
                 const wallets = window.navigator.wallets.get();
                 wallets.forEach(w => {
                     if (!detected.has(w.name)) detected.set(w.name, { name: w.name, provider: w, type: 'standard' });
                 });
-                window.navigator.wallets.on('register', (w) => {
-                    detected.set(w.name, { name: w.name, provider: w, type: 'standard' });
-                    // Try auto-connect if late arrival
-                    attemptAutoConnect(detected);
-                });
             }
 
-            // 2. LEGACY INJECTIONS
+            // 2. LEGACY GLOBAL CHECKS (CRITICAL FOR JUPITER)
+            // Log for debugging
+            if (window.jupiter) console.log("BADSEED: found window.jupiter");
+            else console.log("BADSEED: window.jupiter NOT found");
+
             if (window.solana && window.solana.isPhantom) detected.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
             if (window.jupiter) detected.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
             if (window.solflare || (window.solana && window.solana.isSolflare)) detected.set('Solflare', { name: 'Solflare', provider: window.solflare || window.solana, type: 'legacy' });
             if (window.backpack) detected.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
             if (window.coinbaseSolana) detected.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
-            if (window.trustwallet) detected.set('Trust Wallet', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
 
             // 3. RENDER
+            // Only update DOM if changed to avoid flicker?
+            // For now, wipe and rebuild is safer for "exact" list
+            if (detected.size > 0 && list.innerHTML.includes("Scanning")) {
+                list.innerHTML = ''; // clear loading message
+            }
+
             if (detected.size === 0) {
-                list.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No Wallets Found.</div>';
+                // Keep loading message if polling, or show none
+                if (!list.innerHTML.includes("button"))
+                    list.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No Wallets Found.<br>Scanning...</div>';
             } else {
+                list.innerHTML = '';
                 detected.forEach((wallet) => {
                     const btn = document.createElement('button');
                     btn.style.width = '100%';
@@ -670,7 +686,6 @@
                 });
             }
 
-            // 4. CHECK AUTO-CONNECT (Only runs once ideally, logic handled inside)
             attemptAutoConnect(detected);
         }
 
