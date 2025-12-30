@@ -601,20 +601,48 @@
             const list = document.getElementById('wallet-list');
             list.innerHTML = '';
 
-            // HELP / TROUBLESHOOTING TIP
-            const helpDiv = document.createElement('div');
-            helpDiv.style.fontSize = '11px';
-            helpDiv.style.color = '#aaa';
-            helpDiv.style.marginBottom = '10px';
-            helpDiv.style.padding = '8px';
-            helpDiv.style.background = '#220000';
-            helpDiv.style.border = '1px solid #500';
-            helpDiv.innerHTML = `
-                <strong>MISSING WALLETS?</strong><br>
-                1. <strong>Local File Issue:</strong> Go to <code>Manage Extensions > Details</code> and enable <strong>"Allow access to file URLs"</strong> for Coinbase/Jupiter.<br>
-                2. <strong>Phantom Conflict:</strong> Phantom might be hiding them. Check Phantom Settings > Developer Settings > <strong>"Default Wallet"</strong> (Set to "Ask" or "Top").
-            `;
-            list.appendChild(helpDiv);
+            // 0. CONFLICT DETECTION (The "Double Phantom" Problem)
+            // If originalSolana is ALSO Phantom, then Phantom is aggressively claiming the window and blocking others.
+            const isDoublePhantom = window.solana?.isPhantom && window.originalSolana?.isPhantom;
+
+            if (isDoublePhantom) {
+                const conflictDiv = document.createElement('div');
+                conflictDiv.style.background = '#aa0000';
+                conflictDiv.style.color = '#fff';
+                conflictDiv.style.padding = '10px';
+                conflictDiv.style.marginBottom = '10px';
+                conflictDiv.style.border = '2px solid red';
+                conflictDiv.style.fontWeight = 'bold';
+                conflictDiv.style.textAlign = 'center';
+                conflictDiv.innerHTML = `
+                    ⚠️ CRITICAL CONFLICT DETECTED ⚠️<br>
+                    <span style="font-size:11px; font-weight:normal;">
+                    Phantom is aggressively blocking other wallets (Coinbase/Jupiter).<br>
+                    It has overwritten the detection variables twice.<br><br>
+                    <strong>THE FIX:</strong><br>
+                    1. Open Phantom Extension<br>
+                    2. Settings (Gear) > Developer Settings<br>
+                    3. Change <strong>"Default Wallet"</strong> from "Always" to <strong>"Ask Every Time"</strong>.<br>
+                    4. Refresh this page.
+                    </span>
+                 `;
+                list.appendChild(conflictDiv);
+            } else {
+                // Standard Help
+                const helpDiv = document.createElement('div');
+                helpDiv.style.fontSize = '11px';
+                helpDiv.style.color = '#aaa';
+                helpDiv.style.marginBottom = '10px';
+                helpDiv.style.padding = '8px';
+                helpDiv.style.background = '#220000';
+                helpDiv.style.border = '1px solid #500';
+                helpDiv.innerHTML = `
+                    <strong>MISSING WALLETS?</strong><br>
+                    1. <strong>Local File Issue:</strong> Go to <code>Manage Extensions > Details</code> and enable <strong>"Allow access to file URLs"</strong>.<br>
+                    2. <strong>Phantom Conflict:</strong> Check Phantom Settings > Developer Settings > <strong>"Default Wallet"</strong>.
+                `;
+                list.appendChild(helpDiv);
+            }
 
             const providers = [];
             const seenProviders = new Set();
@@ -782,12 +810,30 @@
             controlsDiv.style.borderTop = '1px dashed #333';
             controlsDiv.style.paddingTop = '10px';
 
-            // Rescan
-            const rescan = document.createElement('button');
-            rescan.innerText = "FORCE RE-SCAN";
-            rescan.style.width = '100%';
-            rescan.style.padding = '8px';
-            rescan.style.marginBottom = '5px';
+            // Log to Console Button (The "Developer Way")
+            const logBtn = document.createElement('button');
+            logBtn.innerText = "LOG OBJECTS TO CONSOLE (F12)";
+            logBtn.style.width = '100%';
+            logBtn.style.padding = '8px';
+            logBtn.style.marginBottom = '5px';
+            logBtn.style.background = '#000044';
+            logBtn.style.color = '#aaf';
+            logBtn.style.border = '1px solid #00f';
+            logBtn.onclick = () => {
+                console.group("--- BADSEED WALLET DEBUG ---");
+                console.log("window.solana:", window.solana);
+                console.log("window.originalSolana:", window.originalSolana);
+                console.log("window.coinbaseSolana:", window.coinbaseSolana);
+                console.log("window.coinbaseWallet:", window.coinbaseWallet);
+                console.log("window.jupiter:", window.jupiter);
+                console.log("window.trustwallet:", window.trustwallet);
+                console.log("Standard Adapters:", standardAdapters);
+                console.log("Full Window Keys (Sol/Wallet):", Object.keys(window).filter(k => k.toLowerCase().includes('sol') || k.toLowerCase().includes('wallet')));
+                console.groupEnd();
+                alert("Check your browser console (F12) for raw object details.");
+            };
+            controlsDiv.appendChild(logBtn);
+
             // Debug
             const debugBtn = document.createElement('button');
             debugBtn.id = 'btn-debug-info';
