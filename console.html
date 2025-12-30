@@ -586,28 +586,32 @@
                 const diff = Math.floor((now - date) / 1000);
                 if (diff < 60) return `${diff}s ago`;
                 if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+                if (diff < 3600) return `${Math.floor(diff / 60)}h ago`;
                 if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
                 return date.toLocaleDateString();
             } catch (e) { return "ERROR"; }
         }
 
-        // --- WALLET SUPPORT (AGGRESSIVE POLLING + JUPITER FIX) ---
+        // --- WALLET SUPPORT (ACCUMULATIVE STATE) ---
 
         let userWallet = null;
         let activeProvider = null;
 
+        // Persistent State to prevent flickering/loss
+        const accumulatedWallets = new Map();
+
         function openWalletSelector() {
             const list = document.getElementById('wallet-list');
-            list.innerHTML = '<div style="color:#666; font-size:10px; padding:10px;">Scanning for wallets... (Polling)</div>';
+            list.innerHTML = '<div style="color:#666; font-size:10px; padding:10px;">Scanning for wallets...</div>';
             document.getElementById('wallet-modal').style.display = 'block';
 
-            // Aggressive Refresh
+            // Start Polling (Accumulates results)
             refreshWalletList();
             let attempts = 0;
             const poller = setInterval(() => {
                 refreshWalletList();
                 attempts++;
-                if (attempts > 20) clearInterval(poller); // Stop after 10s
+                if (attempts > 20) clearInterval(poller);
             }, 500);
 
             if (!document.getElementById('scan-btn')) {
@@ -616,77 +620,71 @@
                 scanBtn.innerText = "REFRESH LIST";
                 scanBtn.style.marginTop = '10px';
                 scanBtn.style.width = '100%';
-                scanBtn.onclick = refreshWalletList;
+                scanBtn.onclick = () => { refreshWalletList(); };
                 document.getElementById('wallet-list').parentElement.appendChild(scanBtn);
             }
         }
 
         function refreshWalletList() {
             const list = document.getElementById('wallet-list');
-            // Don't clear if we have items, just append/update? No, simpler to rebuild for now to avoid dupes.
-            // But we want to handle "flicker" if polling.
-            // Let's gather first, then render.
 
-            const detected = new Map();
+            // 1. GATHER (Accumulate into global map)
 
-            // 1. STANDARD
+            // STANDARD
             if (window.navigator && window.navigator.wallets) {
                 const wallets = window.navigator.wallets.get();
                 wallets.forEach(w => {
-                    if (!detected.has(w.name)) detected.set(w.name, { name: w.name, provider: w, type: 'standard' });
+                    if (!accumulatedWallets.has(w.name)) {
+                        accumulatedWallets.set(w.name, { name: w.name, provider: w, type: 'standard' });
+                        console.log("BADSEED: Found Standard " + w.name);
+                    }
                 });
             }
 
-            // 2. LEGACY GLOBAL CHECKS (CRITICAL FOR JUPITER)
-            // Log for debugging
-            if (window.jupiter) console.log("BADSEED: found window.jupiter");
-            else console.log("BADSEED: window.jupiter NOT found");
-
-            if (window.solana && window.solana.isPhantom) detected.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
-            if (window.jupiter) detected.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
-            if (window.solflare || (window.solana && window.solana.isSolflare)) detected.set('Solflare', { name: 'Solflare', provider: window.solflare || window.solana, type: 'legacy' });
-            if (window.backpack) detected.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
-            if (window.coinbaseSolana) detected.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
-
-            // 3. RENDER
-            // Only update DOM if changed to avoid flicker?
-            // For now, wipe and rebuild is safer for "exact" list
-            if (detected.size > 0 && list.innerHTML.includes("Scanning")) {
-                list.innerHTML = ''; // clear loading message
+            // LEGACY / INJECTED (Explicit Checks)
+            if (window.solana && window.solana.isPhantom) accumulatedWallets.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
+            if (window.jupiter) accumulatedWallets.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
+            if (window.solflare || (window.solana && window.solana.isSolflare)) {
+                accumulatedWallets.set('Solflare', { name: 'Solflare', provider: window.solflare || window.solana, type: 'legacy' });
             }
+            if (window.backpack) accumulatedWallets.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
+            if (window.coinbaseSolana) accumulatedWallets.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
+            if (window.trustwallet) accumulatedWallets.set('Trust Wallet', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
 
-            if (detected.size === 0) {
-                // Keep loading message if polling, or show none
-                if (!list.innerHTML.includes("button"))
+            // 2. RENDER (Rebuild from Accumulation)
+            if (accumulatedWallets.size === 0) {
+                if (!list.innerHTML.includes("button") && !list.innerHTML.includes("Scanning"))
                     list.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No Wallets Found.<br>Scanning...</div>';
-            } else {
-                list.innerHTML = '';
-                detected.forEach((wallet) => {
-                    const btn = document.createElement('button');
-                    btn.style.width = '100%';
-                    btn.style.marginBottom = '8px';
-                    btn.style.padding = '12px';
-                    btn.style.background = '#002200';
-                    btn.style.border = '1px solid #0f0';
-                    btn.style.color = '#0f0';
-                    btn.style.cursor = 'pointer';
-                    btn.style.display = 'flex';
-                    btn.style.justifyContent = 'space-between';
-                    btn.style.alignItems = 'center';
-                    btn.style.fontFamily = 'Courier New';
-
-                    const iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>`;
-                    btn.innerHTML = `<div style="display:flex; align-items:center; gap:10px;">${iconSvg}<span style="font-weight:bold; font-size:14px;">${wallet.name}</span></div><span style="font-size:9px; color:#484;">${wallet.type === 'standard' ? 'STD' : 'LEGACY'}</span>`;
-
-                    btn.onclick = () => {
-                        if (wallet.type === 'standard') connectStandardWallet(wallet);
-                        else connectLegacyWallet(wallet);
-                    };
-                    list.appendChild(btn);
-                });
+                return;
             }
 
-            attemptAutoConnect(detected);
+            // We have wallets. Re-render list.
+            list.innerHTML = '';
+            accumulatedWallets.forEach((wallet) => {
+                const btn = document.createElement('button');
+                btn.style.width = '100%';
+                btn.style.marginBottom = '8px';
+                btn.style.padding = '12px';
+                btn.style.background = '#002200';
+                btn.style.border = '1px solid #0f0';
+                btn.style.color = '#0f0';
+                btn.style.cursor = 'pointer';
+                btn.style.display = 'flex';
+                btn.style.justifyContent = 'space-between';
+                btn.style.alignItems = 'center';
+                btn.style.fontFamily = 'Courier New';
+
+                const iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>`;
+                btn.innerHTML = `<div style="display:flex; align-items:center; gap:10px;">${iconSvg}<span style="font-weight:bold; font-size:14px;">${wallet.name}</span></div><span style="font-size:9px; color:#484;">${wallet.type === 'standard' ? 'STD' : 'LEGACY'}</span>`;
+
+                btn.onclick = () => {
+                    if (wallet.type === 'standard') connectStandardWallet(wallet);
+                    else connectLegacyWallet(wallet);
+                };
+                list.appendChild(btn);
+            });
+
+            attemptAutoConnect(accumulatedWallets);
         }
 
         // AUTO-CONNECT LOGIC
@@ -1247,6 +1245,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T02:45 -->
+<!-- FORCE DEPLOY: 2025-12-30T02:50 -->
 
 </html>
