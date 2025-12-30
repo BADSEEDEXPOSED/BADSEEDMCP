@@ -809,14 +809,11 @@
                         if (isStandardAdapter) connectStandardWallet(provider);
                         else connectSpecificWallet(provider);
                     } else {
-                        // MANUAL PATH (Strict)
-                        // Do NOT fallback to window.solana (Phantom)
-
+                        // MANUAL PATH (Strict Override)
                         let targetProvider = null;
 
-                        // Lazy Check: Maybe it loaded now?
                         if (w.id === 'jupiter') targetProvider = window.jupiter || window.jupiterWallet;
-                        else if (w.id === 'coinbase') targetProvider = window.coinbaseSolana || window.coinbaseWallet || window.coinbase || (window.ethereum?.isCoinbaseWallet ? window.ethereum : null);
+                        else if (w.id === 'coinbase') targetProvider = window.coinbaseSolana || window.coinbaseWallet || window.coinbase;
                         else if (w.id === 'solflare') targetProvider = window.solflare;
                         else if (w.id === 'backpack') targetProvider = window.backpack;
                         else if (w.id === 'trust') targetProvider = window.trustwallet || window.trustWallet;
@@ -827,22 +824,8 @@
                             alert(`Found ${w.name}! Connecting...`);
                             connectSpecificWallet(targetProvider);
                         } else {
-                            // STILL MISSING
-                            let msg = `❌ ERROR: Could not find '${w.name}' object.\n`;
-                            msg += `(e.g. window.${w.check[0]} is undefined)\n\n`;
-
-                            if (window.location.protocol === 'file:') {
-                                msg += `⚠️ PROBABLE CAUSE: FILE:// PROTOCOL.\n`;
-                                msg += `Computers restrict extensions on local files.\n`;
-                                msg += `FIX: Run a local server (http-server) OR Allow File Access in Extension details.`;
-                            } else {
-                                msg += `POSSIBLE CAUSES:\n`;
-                                msg += `1. Extension is locked.\n`;
-                                msg += `2. Extension is disabled.\n`;
-                                msg += `3. Phantom blocking (Developer Settings > Default Wallet).\n`;
-                            }
-
-                            alert(msg);
+                            // ERROR: Object Not Found
+                            alert(`❌ ERROR: window.${w.check[0]} is undefined.\n\nThe ${w.name} extension is NOT injecting into this page.\n\nPossible Reasons:\n1. Extension is locked or disabled.\n2. Phantom "Default Wallet" setting is blocking it.\n3. Browser Policy (try refreshing).`);
                         }
                     }
                 };
