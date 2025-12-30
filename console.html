@@ -627,8 +627,8 @@
             // 2b. OVERWRITTEN INJECTION (window.originalSolana)
             // Sometimes Phantom overwrites Coinbase/Trust. They might hide here.
             if (window.originalSolana) {
-                let name = "Original Injection (Hidden)";
-                if (window.originalSolana.isCoinbaseWallet) name = "Coinbase Wallet (Hidden)";
+                let name = "DETECTED HIDDEN WALLET";
+                if (window.originalSolana.isCoinbaseWallet) name = "Coinbase (Hidden)";
                 if (window.originalSolana.isTrust) name = "Trust Wallet (Hidden)";
 
                 addProvider(name, window.originalSolana);
@@ -651,13 +651,14 @@
                     if (p.solana) p = p.solana;
 
                     // RELAXED CHECK: If the global exists, show it.
-                    // Don't pre-filter by .connect(), just let the user try.
                     let displayName = capitalize(key);
                     if (key === 'braveSolana') displayName = 'Brave';
                     if (key === 'coinbaseSolana') displayName = 'Coinbase (Solana)';
                     if (key === 'coinbaseWalletExtension') displayName = 'Coinbase (Ext)';
                     if (key === 'coinbaseWallet') displayName = 'Coinbase (Root)';
                     if (key === 'xfi') displayName = 'XDEFI';
+                    if (key === 'originalSolana') displayName = 'Original (Hidden)';
+                    if (key === 'trustwallet' || key === 'trustWallet') displayName = 'Trust Wallet';
                     if (key === 'jupiter' || key === 'jupiterWallet') displayName = 'Jupiter';
 
                     addProvider(`Legacy: ${displayName}`, p);
@@ -759,6 +760,17 @@
                 } else {
                     debugHtml += "window.solana NOT FOUND<br>";
                 }
+
+                debugHtml += `<br><strong>WINDOW.ORIGINAL-SOLANA FLAGS:</strong><br>`;
+                if (window.originalSolana) {
+                    ['isPhantom', 'isBackpack', 'isSolflare', 'isGlow', 'isTrust', 'isCoinbaseWallet', 'isJupiter'].forEach(f => {
+                        if (window.originalSolana[f]) debugHtml += `- ${f}: TRUE<br>`;
+                    });
+                    if (Object.keys(window.originalSolana).length === 0) debugHtml += "(Object keys empty)";
+                } else {
+                    debugHtml += "window.originalSolana NOT FOUND<br>";
+                }
+
                 debugHtml += `</div>`;
                 const debugContainer = document.createElement('div');
                 debugContainer.innerHTML = debugHtml;
