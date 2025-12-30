@@ -621,12 +621,13 @@
                 addProvider(name, window.solana);
             }
 
-            // 3. EXPLICIT KNOWN NAMESPACES 
+            // 3. EXPLICIT KNOWN NAMESPACES (Massive List)
             const knownKeys = [
                 'phantom', 'solflare', 'backpack', 'trustwallet', 'glow', 'slope', 'clover',
                 'coin98', 'solong', 'torus', 'exodus', 'coinbaseSolana', 'braveSolana',
                 'mathwallet', 'bitkeep', 'okxwallet', 'starry', 'nightly', 'spot',
-                'xfi', 'salmon', 'alpha', 'martian', 'rise', 'frontier', 'safepal'
+                'xfi', 'salmon', 'alpha', 'martian', 'rise', 'frontier', 'safepal',
+                'hyperpay', 'tokenpocket', 'onto', 'blocto', 'rabby', 'gamestop'
             ];
 
             knownKeys.forEach(key => {
@@ -645,17 +646,25 @@
                 }
             });
 
-            // 4. AGGRESSIVE HEURISTIC SCAN
-            const ignore = new Set(['solana', 'parent', 'self', 'top', 'frames', 'opener', 'window', 'document', 'external', 'chrome', 'performance', 'console', 'location', 'history', 'navigator', 'screen', 'localStorage', 'sessionStorage', 'customElements', 'styleMedia', 'speechSynthesis', 'crypto', 'indexedDB']);
+            // 4. ULTRA-AGGRESSIVE DISCOVERY (Heuristic)
+            const ignore = new Set(['solana', 'parent', 'self', 'top', 'frames', 'opener', 'window', 'document', 'external', 'chrome', 'performance', 'console', 'location', 'history', 'navigator', 'screen', 'localStorage', 'sessionStorage', 'customElements', 'styleMedia', 'speechSynthesis', 'crypto', 'indexedDB', 'visualViewport']);
 
             Object.keys(window).forEach(key => {
                 if (ignore.has(key) || knownKeys.includes(key)) return;
                 try {
                     const candidate = window[key];
                     if (candidate && typeof candidate === 'object') {
+
+                        // Heuristic: Must have connect()
                         if (typeof candidate.connect === 'function') {
-                            const hasSign = candidate.signTransaction || candidate.signAndSendTransaction || candidate.signMessage;
-                            if (hasSign) {
+
+                            // Condition A: Standard Accessors
+                            const hasSign = candidate.signTransaction || candidate.signAndSendTransaction || candidate.signMessage || candidate.request;
+
+                            // Condition B: Naming Convention
+                            const nameMatch = key.toLowerCase().includes('wallet') || key.toLowerCase().includes('sol') || key.toLowerCase().includes('provider');
+
+                            if (hasSign || nameMatch) {
                                 addProvider(`Unknown: ${capitalize(key)}`, candidate);
                             }
                         }
@@ -664,7 +673,7 @@
             });
 
             if (providers.length === 0) {
-                list.innerHTML = '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Standard & Legacy scans empty)</span></div>';
+                list.innerHTML = '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Deep scan found 0 objects with .connect())</span></div>';
             } else {
                 providers.forEach(p => {
                     const btn = document.createElement('button');
@@ -686,6 +695,17 @@
                     list.appendChild(btn);
                 });
             }
+
+            // Add Rescan Button
+            const rescan = document.createElement('button');
+            rescan.innerText = "FORCE RE-SCAN";
+            rescan.style.width = '100%';
+            rescan.style.padding = '8px';
+            rescan.style.marginTop = '10px';
+            rescan.style.background = '#333';
+            rescan.style.color = '#fff';
+            rescan.onclick = openWalletSelector;
+            list.appendChild(rescan);
 
             document.getElementById('wallet-modal').style.display = 'block';
         }
