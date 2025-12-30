@@ -925,53 +925,92 @@
         function openWalletSelector() {
             const list = document.getElementById('wallet-list');
             list.innerHTML = '';
-
+            
             const providers = [];
-
-            // 1. Generic / Standard Injection
+            
+            // --- 1. THE STANDARD INJECTION ('window.solana') ---
             if ("solana" in window) {
-                const isPhantom = window.solana.isPhantom;
-                const name = isPhantom ? "Phantom" : "Standard Wallet (Window.Solana)";
-                providers.push({ name: name, provider: window.solana });
+                const s = window.solana;
+                let name = "Standard Wallet (Window.Solana)";
+                if (s.isPhantom) name = "Phantom";
+                if (s.isBraveWallet) name = "Brave Wallet";
+                if (s.isTrust) name = "Trust Wallet";
+                if (s.isLedger) name = "Ledger";
+                if (s.isBackpack) name = "Backpack";
+                
+                providers.push({ name: name, provider: s });
             }
 
-            // 2. Specific Namespaces
-            if ("phantom" in window && window.phantom.solana) providers.push({ name: "Phantom (Direct)", provider: window.phantom.solana });
-            if ("solflare" in window) providers.push({ name: "Solflare", provider: window.solflare });
-            if ("backpack" in window) providers.push({ name: "Backpack", provider: window.backpack });
-            if ("trustwallet" in window) providers.push({ name: "Trust Wallet", provider: window.trustwallet });
-            if ("glow" in window) providers.push({ name: "Glow", provider: window.glow });
-            if ("slope" in window) providers.push({ name: "Slope", provider: window.slope });
-            if ("clover" in window) providers.push({ name: "Clover", provider: window.clover });
-            if ("coin98" in window) providers.push({ name: "Coin98", provider: window.coin98.sol });
-            if ("exodus" in window && window.exodus.solana) providers.push({ name: "Exodus", provider: window.exodus.solana });
-            if ("coinbaseSolana" in window) providers.push({ name: "Coinbase Wallet", provider: window.coinbaseSolana });
-            if ("braveSolana" in window) providers.push({ name: "Brave Wallet", provider: window.braveSolana });
+            // --- 2. SPECIFIC NAMESPACE CHECKS (Maximal Coverage) ---
+            const known = [
+                { k: 'phantom', n: 'Phantom (Direct)', p: w => w.phantom?.solana },
+                { k: 'solflare', n: 'Solflare', p: w => w.solflare },
+                { k: 'backpack', n: 'Backpack', p: w => w.backpack },
+                { k: 'trustwallet', n: 'Trust Wallet', p: w => w.trustwallet },
+                { k: 'okxwallet', n: 'OKX Wallet', p: w => w.okxwallet?.solana },
+                { k: 'bitkeep', n: 'BitKeep', p: w => w.bitkeep?.solana },
+                { k: 'coin98', n: 'Coin98', p: w => w.coin98?.sol },
+                { k: 'mathwallet', n: 'MathWallet', p: w => w.mathwallet?.solana },
+                { k: 'exodus', n: 'Exodus', p: w => w.exodus?.solana },
+                { k: 'coinbaseSolana', n: 'Coinbase', p: w => w.coinbaseSolana },
+                { k: 'braveSolana', n: 'Brave (Direct)', p: w => w.braveSolana },
+                { k: 'clover', n: 'Clover', p: w => w.clover?.solana },
+                { k: 'slope', n: 'Slope', p: w => w.slope },
+                { k: 'glow', n: 'Glow', p: w => w.glow },
+                { k: 'solong', n: 'Solong', p: w => w.solong },
+                { k: 'starry', n: 'Starry', p: w => w.starry?.solana },
+                { k: 'nightly', n: 'Nightly', p: w => w.nightly?.solana },
+                { k: 'spot', n: 'Spot', p: w => w.spot?.solana },
+                { k: 'alpha', n: 'AlphaWallet', p: w => w.alpha?.solana },
+                { k: 'salmon', n: 'Salmon', p: w => w.salmon },
+                { k: 'xdefi', n: 'XDEFI', p: w => w.xfi?.solana }
+            ];
 
-            // Deduplication (Simple name check)
+            known.forEach(def => {
+                if (def.k in window) {
+                    const p = def.p(window);
+                    if (p) providers.push({ name: def.n, provider: p });
+                }
+            });
+
+            // Deduplicate by Name AND Provider reference to avoid clutter
             const unique = [];
-            const seen = new Set();
-            providers.forEach(p => {
-                if (!seen.has(p.name)) {
-                    seen.add(p.name);
-                    unique.push(p);
+            const seenNames = new Set();
+            
+            providers.forEach(entry => {
+                // If we already have "Phantom", don't add "Phantom (Direct)" unless the provider object is different?
+                // Actually, user wants clarity. Let's list unique detected namespaces.
+                // We will dedupe purely by NAME to avoid "Phantom" and "Phantom" appearing twice.
+                // But "Phantom" and "Phantom (Direct)" are distinct names so they will both appear.
+                // This gives user choices.
+                
+                // Let's filter out "Standard Wallet" if we found a specific one? 
+                // No, "Standard" is a safe fallback.
+                
+                if (!seenNames.has(entry.name)) {
+                    seenNames.add(entry.name);
+                    unique.push(entry);
                 }
             });
 
             if (unique.length === 0) {
-                list.innerHTML = '<div style="color:#f00;">No Wallets Detected.<br>Install Phantom, Solflare, or Backpack.</div>';
+                list.innerHTML = '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Sandbox/Extension hidden?)</span></div>';
             } else {
                 unique.forEach(p => {
                     const btn = document.createElement('button');
-                    btn.innerText = p.name;
+                    btn.innerText = `CONNECT: ${p.name}`;
                     btn.style.width = '100%';
-                    btn.style.padding = '10px';
-                    btn.style.marginBottom = '5px';
+                    btn.style.padding = '12px';
+                    btn.style.marginBottom = '8px';
+                    btn.style.background = '#002200';
+                    btn.style.color = '#0f0';
+                    btn.style.border = '1px solid #0f0';
+                    btn.style.cursor = 'pointer';
                     btn.onclick = () => connectSpecificWallet(p.provider);
                     list.appendChild(btn);
                 });
             }
-
+            
             document.getElementById('wallet-modal').style.display = 'block';
         }
 
