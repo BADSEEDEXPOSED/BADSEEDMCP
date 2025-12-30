@@ -1084,6 +1084,107 @@
 
 
 
+
+        // --- ACTION HANDLERS ---
+        function openSacrifice() {
+            if (!userWallet) return openWalletSelector();
+            const ui = document.getElementById('action-ui');
+            ui.style.display = 'block';
+            document.getElementById('action-title').innerText = "SACRIFICE (BURN)";
+            document.getElementById('action-input-1').placeholder = "Amount (SOL)";
+            document.getElementById('action-input-2').style.display = 'block';
+            document.getElementById('action-input-2').placeholder = "Last Words (Memo)";
+            document.getElementById('action-btn').innerText = "BURN IT";
+            document.getElementById('action-btn').onclick = executeSacrifice;
+        }
+
+        function openMessage() {
+            if (!userWallet) return openWalletSelector();
+            const ui = document.getElementById('action-ui');
+            ui.style.display = 'block';
+            document.getElementById('action-title').innerText = "SEND MESSAGE";
+            document.getElementById('action-input-1').placeholder = "Message";
+            document.getElementById('action-input-2').style.display = 'none';
+            document.getElementById('action-btn').innerText = "SEND (0.001 SOL)";
+            document.getElementById('action-btn').onclick = executeMessage;
+        }
+
+        async function executeSacrifice() {
+            const amt = parseFloat(document.getElementById('action-input-1').value);
+            const memo = document.getElementById('action-input-2').value;
+            if (!amt || isNaN(amt)) return alert("Invalid Amount");
+
+            try {
+                await sendSol(amt, memo);
+                alert("Sacrifice Complete.");
+                document.getElementById('action-ui').style.display = 'none';
+            } catch (e) { alert("Burn Failed: " + e.message); }
+        }
+
+        async function executeMessage() {
+            const memo = document.getElementById('action-input-1').value;
+            if (!memo) return alert("Message Empty");
+
+            try {
+                // Send 0.001 SOL as "Message Fee"
+                await sendSol(0.001, memo);
+                alert("Message Sent.");
+                document.getElementById('action-ui').style.display = 'none';
+            } catch (e) { alert("Send Failed: " + e.message); }
+        }
+
+        async function sendSol(amount, memo) {
+            if (!activeProvider || !userWallet) throw new Error("No Wallet");
+
+            // Assuming window.solanaWeb3 is available from CDN
+            const { Connection, Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL, TransactionInstruction } = solanaWeb3;
+
+            // Use Helius or Public RPC
+            const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
+
+            const destPubkey = new PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
+            const walletPubkey = new PublicKey(userWallet);
+
+            const tx = new Transaction();
+
+            // Transfer
+            tx.add(SystemProgram.transfer({
+                fromPubkey: walletPubkey,
+                toPubkey: destPubkey,
+                lamports: amount * LAMPORTS_PER_SOL
+            }));
+
+            // Memo
+            if (memo) {
+                const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+                tx.add(new TransactionInstruction({
+                    keys: [{ pubkey: walletPubkey, isSigner: true, isWritable: true }],
+                    programId: MEMO_ID,
+                    data: (new TextEncoder()).encode(memo)
+                }));
+            }
+
+            const { blockhash } = await connection.getLatestBlockhash();
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = walletPubkey;
+
+            const { signature } = await activeProvider.signAndSendTransaction(tx);
+            await connection.confirmTransaction(signature);
+            return signature;
+        }
+
+        // --- INIT ---
+        function refreshAll() {
+            fetchHeartbeat();
+            fetchSentiment();
+            fetchQueue();
+            fetchArchive();
+            fetchWallet();
+        }
+
+        setInterval(refreshAll, 10000); // 10s
+        refreshAll();
+        fetchLogic(); // Load Logic on start
     </script>
 </body>
 <!-- FORCE DEPLOY: 2025-12-29T21:44 -->
