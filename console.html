@@ -809,14 +809,40 @@
                         if (isStandardAdapter) connectStandardWallet(provider);
                         else connectSpecificWallet(provider);
                     } else {
-                        // Manual Fallback Attempt
-                        alert(`Attempting to connect to ${w.name}...\n(It was not auto-detected)`);
+                        // MANUAL PATH (Strict)
+                        // Do NOT fallback to window.solana (Phantom)
 
-                        // Try window.solana as a hail mary
-                        if (window.solana) {
-                            connectSpecificWallet(window.solana);
+                        let targetProvider = null;
+
+                        // Lazy Check: Maybe it loaded now?
+                        if (w.id === 'jupiter') targetProvider = window.jupiter || window.jupiterWallet;
+                        else if (w.id === 'coinbase') targetProvider = window.coinbaseSolana || window.coinbaseWallet || window.coinbase || (window.ethereum?.isCoinbaseWallet ? window.ethereum : null);
+                        else if (w.id === 'solflare') targetProvider = window.solflare;
+                        else if (w.id === 'backpack') targetProvider = window.backpack;
+                        else if (w.id === 'trust') targetProvider = window.trustwallet || window.trustWallet;
+                        else if (w.id === 'phantom') targetProvider = window.solana;
+
+                        if (targetProvider) {
+                            console.log("Found late provider:", w.name, targetProvider);
+                            alert(`Found ${w.name}! Connecting...`);
+                            connectSpecificWallet(targetProvider);
                         } else {
-                            window.open("https://google.com/search?q=install+" + w.name + "+wallet+extension", "_blank");
+                            // STILL MISSING
+                            let msg = `❌ ERROR: Could not find '${w.name}' object.\n`;
+                            msg += `(e.g. window.${w.check[0]} is undefined)\n\n`;
+
+                            if (window.location.protocol === 'file:') {
+                                msg += `⚠️ PROBABLE CAUSE: FILE:// PROTOCOL.\n`;
+                                msg += `Computers restrict extensions on local files.\n`;
+                                msg += `FIX: Run a local server (http-server) OR Allow File Access in Extension details.`;
+                            } else {
+                                msg += `POSSIBLE CAUSES:\n`;
+                                msg += `1. Extension is locked.\n`;
+                                msg += `2. Extension is disabled.\n`;
+                                msg += `3. Phantom blocking (Developer Settings > Default Wallet).\n`;
+                            }
+
+                            alert(msg);
                         }
                     }
                 };
