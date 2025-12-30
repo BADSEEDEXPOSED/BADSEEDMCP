@@ -724,10 +724,118 @@
                 } catch (e) { }
             });
 
-            if (providers.length === 0) {
-                list.innerHTML += '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Deep scan found 0 objects with .connect())</span></div>';
-            } else {
-                providers.forEach(p => {
+            // 5. RENDER UNIFIED LIST (Manual + Detected)
+            const majorWallets = [
+                { id: 'phantom', name: 'Phantom', check: ['phantom', 'isPhantom'] },
+                { id: 'solflare', name: 'Solflare', check: ['solflare', 'isSolflare'] },
+                { id: 'jupiter', name: 'Jupiter', check: ['jupiter', 'jupiterWallet', 'isJupiter'] },
+                { id: 'coinbase', name: 'Coinbase', check: ['coinbaseSolana', 'coinbaseWallet', 'coinbase', 'isCoinbaseWallet'] },
+                { id: 'trust', name: 'Trust Wallet', check: ['trustwallet', 'trustWallet', 'isTrust'] },
+                { id: 'backpack', name: 'Backpack', check: ['backpack', 'isBackpack'] }
+            ];
+
+            // Add Major Wallets First
+            majorWallets.forEach(w => {
+                let provider = null;
+                let isDetected = false;
+                let isStandardAdapter = false;
+
+                // Check Standard Adapters first
+                const stdAdapter = standardAdapters.find(a => a.name.toLowerCase().includes(w.name.toLowerCase()));
+                if (stdAdapter) {
+                    provider = stdAdapter;
+                    isDetected = true;
+                    isStandardAdapter = true;
+                }
+
+                // Check Window Injection
+                if (!provider) {
+                    // Direct Window Key
+                    for (const key of w.check) {
+                        if (window[key]) {
+                            provider = window[key];
+                            // If it's a wrapper, dig for solana
+                            if (provider.solana) provider = provider.solana;
+                            isDetected = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Check window.solana flags
+                if (!provider && window.solana) {
+                    for (const check of w.check) {
+                        if (window.solana[check] === true) {
+                            provider = window.solana;
+                            isDetected = true;
+                            break;
+                        }
+                    }
+                }
+
+                // Check hidden originalSolana Flags
+                if (!provider && window.originalSolana) {
+                    for (const check of w.check) {
+                        if (window.originalSolana[check] === true) {
+                            provider = window.originalSolana;
+                            isDetected = true;
+                            break;
+                        }
+                    }
+                }
+
+                // CREATE BUTTON (Detected or Not)
+                const btn = document.createElement('button');
+                btn.style.width = '100%';
+                btn.style.padding = '12px';
+                btn.style.marginBottom = '8px';
+                btn.style.border = isDetected ? '1px solid #0f0' : '1px solid #444';
+                btn.style.background = isDetected ? '#002200' : '#111';
+                btn.style.color = isDetected ? '#0f0' : '#888';
+                btn.style.cursor = 'pointer';
+                btn.style.display = 'flex';
+                btn.style.justifyContent = 'space-between';
+                btn.style.alignItems = 'center';
+
+                btn.innerHTML = `
+                    <span>${w.name.toUpperCase()}</span>
+                    <span style="font-size:10px; color:${isDetected ? '#0f0' : '#444'}">
+                        ${isDetected ? '● DETECTED' : '○ MANUAL CLICK'}
+                    </span>
+                `;
+
+                btn.onclick = () => {
+                    if (provider) {
+                        if (isStandardAdapter) connectStandardWallet(provider);
+                        else connectSpecificWallet(provider);
+                    } else {
+                        // Manual Fallback Attempt
+                        alert(`Attempting to connect to ${w.name}...\n(It was not auto-detected)`);
+
+                        // Try window.solana as a hail mary
+                        if (window.solana) {
+                            connectSpecificWallet(window.solana);
+                        } else {
+                            window.open("https://google.com/search?q=install+" + w.name + "+wallet+extension", "_blank");
+                        }
+                    }
+                };
+
+                list.appendChild(btn);
+
+                // Mark as seen so we don't duplicate in "Other" list
+                if (provider) seenProviders.add(provider);
+            });
+
+            // 6. RENDER OTHER DETECTED WALLETS (Legacy/Unknown)
+            let otherWalletsFound = false;
+            providers.forEach(p => {
+                // If we already handled it in Major list, skip
+                // (We can't easily equate 'p.provider' to what we found above without complex object checking)
+                // Simplified: Just add them if unrelated to major names AND not already seen
+                const isMajor = majorWallets.some(mw => p.name.toLowerCase().includes(mw.name.toLowerCase()));
+                if (!isMajor && !seenProviders.has(p.provider)) {
+                    otherWalletsFound = true;
                     const btn = document.createElement('button');
                     btn.innerText = p.name.toUpperCase();
                     btn.style.width = '100%';
@@ -738,14 +846,19 @@
                     btn.style.border = '1px solid #0f0';
                     btn.style.cursor = 'pointer';
 
-                    if (p.isStandard) {
-                        btn.onclick = () => connectStandardWallet(p.provider);
-                    } else {
-                        btn.onclick = () => connectSpecificWallet(p.provider);
-                    }
+                    if (p.isStandard) btn.onclick = () => connectStandardWallet(p.provider);
+                    else btn.onclick = () => connectSpecificWallet(p.provider);
 
                     list.appendChild(btn);
-                });
+                }
+            });
+
+            if (!otherWalletsFound && majorWallets.every(w => !w.isDetected)) { // Check if no major wallets were detected and no other wallets were found
+                if (list.children.length === 1 && list.children[0].id === 'file-warn') { // Only file warning present
+                    list.innerHTML += '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Deep scan found 0 objects with .connect())</span></div>';
+                } else if (list.children.length === majorWallets.length) { // Only major wallet buttons, all undetected
+                    // No additional message needed, the buttons already show "MANUAL CLICK"
+                }
             }
 
 
