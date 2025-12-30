@@ -1354,7 +1354,15 @@
         // MOVED sendSol to avoid duplication/confusion (it's below)
 
         async function sendSol(amount, memo) {
-            if (!activeProvider || !userWallet) throw new Error("No Wallet");
+            if (!activeProvider) throw new Error("No Wallet");
+
+            // FORCE SYNC (Critical Fix)
+            if (activeProvider.publicKey) {
+                userWallet = activeProvider.publicKey.toString();
+                console.log("sendSol: Forced userWallet sync to", userWallet);
+            }
+
+            if (!userWallet) throw new Error("Wallet not connected (No Public Key)");
 
             // Assuming window.solanaWeb3 is available from CDN
             const { Connection, Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL, TransactionInstruction } = solanaWeb3;
@@ -1365,6 +1373,8 @@
             const destPubkey = new PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
             const walletPubkey = new PublicKey(userWallet);
 
+            console.log("Building Tx: From", walletPubkey.toString(), "To", destPubkey.toString(), "Amount", amount);
+
             const tx = new Transaction();
 
             // Transfer
@@ -1374,19 +1384,19 @@
                 lamports: Math.floor(amount * LAMPORTS_PER_SOL)
             }));
 
-            // Memo (Matched to badseed-exposed: No keys)
-            if (memo) {
-                const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-                tx.add(new TransactionInstruction({
-                    keys: [],
-                    programId: MEMO_ID,
-                    data: (new TextEncoder()).encode(memo)
-                }));
-            }
+            // Memo (TEMPORARILY DISABLED TO ISOLATE ERROR)
+            // if (memo) {
+            //     const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+            //     tx.add(new TransactionInstruction({
+            //         keys: [], 
+            //         programId: MEMO_ID,
+            //         data: (new TextEncoder()).encode(memo)
+            //     }));
+            // }
 
             const { blockhash } = await connection.getLatestBlockhash();
             tx.recentBlockhash = blockhash;
-            tx.feePayer = walletPubkey;
+            tx.feePayer = walletPubkey; // This must match activeProvider.publicKey
 
             // Use Shared Wrapper
             const signature = await sendTransactionWrapper(tx, connection);
@@ -1576,27 +1586,23 @@
                 console.warn("Tx Wrapper Send Failed:", err);
                 const msg = err.message || JSON.stringify(err);
                 if (msg.includes("authorized") || msg.includes("User rejected") || msg.includes("0x0")) {
-                    console.log("Wrapper: AGGRESSIVE RECONNECT...");
+                    console.log("Wrapper: Unauthorized. Refreshing session...");
                     try {
                         if (activeProvider.disconnect) {
                             try { await activeProvider.disconnect(); } catch (e) { }
                         }
                         await activeProvider.connect();
 
-                        // RE-FORCE FeePayer after reconnect
-                        transaction.feePayer = activeProvider.publicKey;
+                        // RE-FORCE FeePayer after reconnect (Just in case user clicks again immediately)
+                        // But DO NOT Auto-Retry the signAndSend.
+                        // User wants to click the button ALWAYS.
 
-                        // Update Blockhash (It might have expired during reconnect?)
-                        // Safe to fetch fresh blockhash
-                        const { blockhash } = await connection.getLatestBlockhash();
-                        transaction.recentBlockhash = blockhash;
+                        console.log("Wrapper: Session Refreshed. Requesting Manual Retry.");
+                        alert("Wallet Connection Refreshed.\nPlease click 'CONFIRM' again to proceed.");
+                        throw new Error("Session Refreshed. Please Retry.");
 
-                        // Retry
-                        console.log("Wrapper: Retrying sign with", activeProvider.publicKey.toString());
-                        const result = await activeProvider.signAndSendTransaction(transaction);
-                        signature = result.signature || result;
                     } catch (retryErr) {
-                        throw new Error("Retry failed: " + (retryErr.message || "Unknown"));
+                        throw new Error("Session Refresh failed: " + (retryErr.message || "Unknown"));
                     }
                 } else {
                     throw err;
@@ -1607,6 +1613,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T04:40 -->
+<!-- FORCE DEPLOY: 2025-12-30T04:55 -->
 
 </html>
