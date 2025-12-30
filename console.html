@@ -928,20 +928,40 @@
 
             const providers = [];
 
-            // Standard + Expanded
+            // 1. Generic / Standard Injection
             if ("solana" in window) {
-                const name = window.solana.isPhantom ? "Phantom" : "Standard Wallet (Window.Solana)";
+                const isPhantom = window.solana.isPhantom;
+                const name = isPhantom ? "Phantom" : "Standard Wallet (Window.Solana)";
                 providers.push({ name: name, provider: window.solana });
             }
+
+            // 2. Specific Namespaces
+            if ("phantom" in window && window.phantom.solana) providers.push({ name: "Phantom (Direct)", provider: window.phantom.solana });
             if ("solflare" in window) providers.push({ name: "Solflare", provider: window.solflare });
             if ("backpack" in window) providers.push({ name: "Backpack", provider: window.backpack });
             if ("trustwallet" in window) providers.push({ name: "Trust Wallet", provider: window.trustwallet });
-            if ("phantom" in window && !window.solana.isPhantom) providers.push({ name: "Phantom (Direct)", provider: window.phantom.solana });
+            if ("glow" in window) providers.push({ name: "Glow", provider: window.glow });
+            if ("slope" in window) providers.push({ name: "Slope", provider: window.slope });
+            if ("clover" in window) providers.push({ name: "Clover", provider: window.clover });
+            if ("coin98" in window) providers.push({ name: "Coin98", provider: window.coin98.sol });
+            if ("exodus" in window && window.exodus.solana) providers.push({ name: "Exodus", provider: window.exodus.solana });
+            if ("coinbaseSolana" in window) providers.push({ name: "Coinbase Wallet", provider: window.coinbaseSolana });
+            if ("braveSolana" in window) providers.push({ name: "Brave Wallet", provider: window.braveSolana });
 
-            if (providers.length === 0) {
+            // Deduplication (Simple name check)
+            const unique = [];
+            const seen = new Set();
+            providers.forEach(p => {
+                if (!seen.has(p.name)) {
+                    seen.add(p.name);
+                    unique.push(p);
+                }
+            });
+
+            if (unique.length === 0) {
                 list.innerHTML = '<div style="color:#f00;">No Wallets Detected.<br>Install Phantom, Solflare, or Backpack.</div>';
             } else {
-                providers.forEach(p => {
+                unique.forEach(p => {
                     const btn = document.createElement('button');
                     btn.innerText = p.name;
                     btn.style.width = '100%';
