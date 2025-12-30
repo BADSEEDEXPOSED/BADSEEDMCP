@@ -896,7 +896,8 @@
         // --- ADMIN LOGIC ---
         async function fetchLogic() {
             try {
-                const res = await fetch(getBaseUrl('config-get'));
+                // Cache buster included
+                const res = await fetch(getBaseUrl('config-get') + '?t=' + Date.now());
                 const data = await res.json();
                 // API returns { rules: [...] }
                 const rules = data.rules || data;
@@ -926,12 +927,19 @@
             list.innerHTML = '';
 
             const providers = [];
-            if ("solana" in window) providers.push({ name: "Phantom / Default", provider: window.solana });
+
+            // Standard + Expanded
+            if ("solana" in window) {
+                const name = window.solana.isPhantom ? "Phantom" : "Standard Wallet (Window.Solana)";
+                providers.push({ name: name, provider: window.solana });
+            }
             if ("solflare" in window) providers.push({ name: "Solflare", provider: window.solflare });
             if ("backpack" in window) providers.push({ name: "Backpack", provider: window.backpack });
+            if ("trustwallet" in window) providers.push({ name: "Trust Wallet", provider: window.trustwallet });
+            if ("phantom" in window && !window.solana.isPhantom) providers.push({ name: "Phantom (Direct)", provider: window.phantom.solana });
 
             if (providers.length === 0) {
-                list.innerHTML = '<div style="color:#f00;">No Wallets Detected.<br>Install Phantom or Solflare.</div>';
+                list.innerHTML = '<div style="color:#f00;">No Wallets Detected.<br>Install Phantom, Solflare, or Backpack.</div>';
             } else {
                 providers.forEach(p => {
                     const btn = document.createElement('button');
