@@ -1340,15 +1340,24 @@
         }
 
         async function executeMessage() {
-            const memo = document.getElementById('action-input-1').value;
-            let amt = parseFloat(document.getElementById('action-input-2').value);
-            if (!memo) return alert("Message Empty");
-            if (!amt || isNaN(amt)) amt = 0.001; // Default
             try {
-                await sendSol(amt, memo);
-                alert("Message Sent.");
+                const message = document.getElementById('message-content').value;
+                if (!message) return alert("Write a sin first.");
+
+                const amount = 0.001;
+                await sendSol(amount, message);
+
+                alert("Sin Confessed to the Blockchain.");
+                document.getElementById('message-modal').style.display = 'none';
                 document.getElementById('action-ui').style.display = 'none';
-            } catch (e) { alert("Send Failed: " + e.message); }
+            } catch (e) {
+                console.error("Execute Message Failed:", e);
+                // Silent failure for User Rejection
+                const msg = e.message || "";
+                if (!msg.includes("rejected") && !msg.includes("Refreshed")) {
+                    alert("Send Failed: " + msg);
+                }
+            }
         }
 
         // MOVED sendSol to avoid duplication/confusion (it's below)
@@ -1356,49 +1365,44 @@
         async function sendSol(amount, memo) {
             if (!activeProvider) throw new Error("No Wallet");
 
-            // FORCE SYNC (Critical Fix)
+            // FORCE SYNC
             if (activeProvider.publicKey) {
                 userWallet = activeProvider.publicKey.toString();
-                console.log("sendSol: Forced userWallet sync to", userWallet);
             }
+            if (!userWallet) throw new Error("Wallet not connected");
 
-            if (!userWallet) throw new Error("Wallet not connected (No Public Key)");
-
-            // Assuming window.solanaWeb3 is available from CDN
-            const { Connection, Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL, TransactionInstruction } = solanaWeb3;
-
-            // Use Helius or Public RPC
+            const { Connection, Transaction, SystemProgram, PublicKey, TransactionInstruction, LAMPORTS_PER_SOL } = solanaWeb3;
             const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
 
             const destPubkey = new PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
-            const walletPubkey = new PublicKey(userWallet);
+            const walletPubkey = new PublicKey(userWallet); // activeProvider.publicKey
 
-            console.log("Building Tx: From", walletPubkey.toString(), "To", destPubkey.toString(), "Amount", amount);
+            console.log("Building Tx:", walletPubkey.toString(), "->", destPubkey.toString(), amount);
 
             const tx = new Transaction();
 
-            // Transfer
+            // 1. Transfer
             tx.add(SystemProgram.transfer({
                 fromPubkey: walletPubkey,
                 toPubkey: destPubkey,
                 lamports: Math.floor(amount * LAMPORTS_PER_SOL)
             }));
 
-            // Memo (TEMPORARILY DISABLED TO ISOLATE ERROR)
-            // if (memo) {
-            //     const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-            //     tx.add(new TransactionInstruction({
-            //         keys: [], 
-            //         programId: MEMO_ID,
-            //         data: (new TextEncoder()).encode(memo)
-            //     }));
-            // }
+            // 2. Memo (RESTORED per badseed-exposed logic)
+            if (memo) {
+                const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+                tx.add(new TransactionInstruction({
+                    keys: [],
+                    programId: MEMO_ID,
+                    data: (new TextEncoder()).encode(memo)
+                }));
+            }
 
             const { blockhash } = await connection.getLatestBlockhash();
             tx.recentBlockhash = blockhash;
-            tx.feePayer = walletPubkey; // This must match activeProvider.publicKey
+            tx.feePayer = walletPubkey;
 
-            // Use Shared Wrapper
+            // Use Unified Wrapper
             const signature = await sendTransactionWrapper(tx, connection);
 
             console.log("Tx Sent:", signature);
@@ -1409,51 +1413,7 @@
         // --- PORTED UTILS (Jupiter + Sweep) ---
         // ... (Keep existing utils) ...
 
-        async function sendTransactionWrapper(transaction, connection) {
-            if (!activeProvider) throw new Error("Wallet not connected");
-
-            // Check for Mismatch
-            if (activeProvider.publicKey && activeProvider.publicKey.toString() !== userWallet) {
-                console.warn("Wallet Mismatch! Provider:", activeProvider.publicKey.toString(), "User:", userWallet);
-                // We could force update userWallet here, or error out
-                // Let's try to reconnect to fix mismatch
-                console.log("Fixing mismatch by reconnecting...");
-                await activeProvider.disconnect();
-                await activeProvider.connect();
-            }
-
-            // Sign and Send with aggressive retry for "Unauthorized"
-            let signature;
-            try {
-                if (activeProvider.signAndSendTransaction) {
-                    const result = await activeProvider.signAndSendTransaction(transaction);
-                    signature = result.signature || result;
-                } else {
-                    throw new Error("Wallet does not support direct signAndSend");
-                }
-            } catch (err) {
-                // ... same retry logic ...
-                console.warn("Tx Wrapper Send Failed:", err);
-                const msg = err.message || JSON.stringify(err);
-                if (msg.includes("authorized") || msg.includes("User rejected") || msg.includes("0x0")) {
-                    console.log("Wrapper: AGGRESSIVE RECONNECT...");
-                    try {
-                        if (activeProvider.disconnect) {
-                            try { await activeProvider.disconnect(); } catch (e) { }
-                        }
-                        await activeProvider.connect();
-                        // Retry
-                        const result = await activeProvider.signAndSendTransaction(transaction);
-                        signature = result.signature || result;
-                    } catch (retryErr) {
-                        throw new Error("Retry failed: " + (retryErr.message || "Unknown"));
-                    }
-                } else {
-                    throw err;
-                }
-            }
-            return signature;
-        }
+        // (Duplicate sendTransactionWrapper removed)
 
         // --- PORTED UTILS (Jupiter + Sweep) ---
 
@@ -1560,72 +1520,36 @@
         async function sendTransactionWrapper(transaction, connection) {
             if (!activeProvider) throw new Error("Wallet not connected");
 
-            // Check for Mismatch (Fixes Unauthorized if provider != userWallet)
+            // Check Mismatch
             const providerKey = activeProvider.publicKey.toString();
             if (activeProvider.publicKey && providerKey !== userWallet) {
-                console.warn(`Wallet Mismatch! Provider: ${providerKey}, User: ${userWallet}`);
-                console.log("Fixing mismatch by reconnecting...");
-                if (activeProvider.disconnect) await activeProvider.disconnect().catch(e => console.log(e));
-                await activeProvider.connect();
+                console.warn(`Mismatch! Prov:${providerKey} User:${userWallet}`);
+                try { await activeProvider.disconnect(); await activeProvider.connect(); } catch (e) { }
             }
 
-            // FORCE FeePayer to match Active Provider (Crucial for Phantom checks)
             transaction.feePayer = activeProvider.publicKey;
 
-            // Sign and Send with aggressive retry for "Unauthorized"
             let signature;
-            try {
-                // STRATEGY 1: Sign Transaction (Preferred for control)
-                if (activeProvider.signTransaction) {
-                    console.log("Wrapper: Using signTransaction (Offline Signing)");
-                    const signedTx = await activeProvider.signTransaction(transaction);
-
-                    // Send Raw
-                    console.log("Wrapper: Broadcasting Raw Transaction...");
-                    const rawTx = signedTx.serialize();
-                    signature = await connection.sendRawTransaction(rawTx, {
-                        skipPreflight: false,
-                        preflightCommitment: 'confirmed'
-                    });
-                }
-                // STRATEGY 2: SignAndSend (Legacy/Fallback)
-                else if (activeProvider.signAndSendTransaction) {
-                    console.log("Wrapper: Using signAndSendTransaction (Adapter Broadcast)");
-                    const result = await activeProvider.signAndSendTransaction(transaction);
-                    signature = result.signature || result;
-                } else {
-                    throw new Error("Wallet does not support direct signAndSend");
-                }
-            } catch (err) {
-                console.warn("Tx Wrapper Send Failed:", err);
-                const msg = err.message || JSON.stringify(err);
-                if (msg.includes("authorized") || msg.includes("User rejected") || msg.includes("0x0")) {
-                    console.log("Wrapper: Unauthorized. Refreshing session...");
-                    try {
-                        if (activeProvider.disconnect) {
-                            try { await activeProvider.disconnect(); } catch (e) { }
-                        }
-                        await activeProvider.connect();
-                        // RE-FORCE FeePayer after reconnect
-                        transaction.feePayer = activeProvider.publicKey;
-
-                        // Manual Retry Request (Silent - No Alert)
-                        console.log("Wrapper: Session Refreshed. Requesting Manual Retry.");
-                        // alert("Wallet Connection Refreshed.\nPlease click 'CONFIRM' again to proceed."); // REMOVED
-                        throw new Error("Session Refreshed. Please click CONFIRM again.");
-
-                    } catch (retryErr) {
-                        throw new Error("Session Refresh failed: " + (retryErr.message || "Unknown"));
-                    }
-                } else {
-                    throw err;
-                }
+            // STRATEGY 1: SignTransaction (Preferred)
+            if (activeProvider.signTransaction) {
+                console.log("Wrapper: signTransaction strategy");
+                const signedTx = await activeProvider.signTransaction(transaction);
+                const rawTx = signedTx.serialize();
+                signature = await connection.sendRawTransaction(rawTx, { skipPreflight: false });
+            }
+            // STRATEGY 2: SignAndSend (Fallback)
+            else if (activeProvider.signAndSendTransaction) {
+                console.log("Wrapper: signAndSend strategy");
+                const result = await activeProvider.signAndSendTransaction(transaction);
+                signature = result.signature || result;
+            } else {
+                throw new Error("No signing method found");
             }
             return signature;
         }
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T05:40 -->
+<!-- FORCE DEPLOY: 2025-12-30T05:50 -->
 
 </html>
