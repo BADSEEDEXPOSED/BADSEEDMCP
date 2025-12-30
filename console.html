@@ -1575,8 +1575,22 @@
             // Sign and Send with aggressive retry for "Unauthorized"
             let signature;
             try {
-                if (activeProvider.signAndSendTransaction) {
-                    console.log("Wrapper: Signing with", activeProvider.publicKey.toString());
+                // STRATEGY 1: Sign Transaction (Preferred for control)
+                if (activeProvider.signTransaction) {
+                    console.log("Wrapper: Using signTransaction (Offline Signing)");
+                    const signedTx = await activeProvider.signTransaction(transaction);
+
+                    // Send Raw
+                    console.log("Wrapper: Broadcasting Raw Transaction...");
+                    const rawTx = signedTx.serialize();
+                    signature = await connection.sendRawTransaction(rawTx, {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    });
+                }
+                // STRATEGY 2: SignAndSend (Legacy/Fallback)
+                else if (activeProvider.signAndSendTransaction) {
+                    console.log("Wrapper: Using signAndSendTransaction (Adapter Broadcast)");
                     const result = await activeProvider.signAndSendTransaction(transaction);
                     signature = result.signature || result;
                 } else {
@@ -1592,14 +1606,13 @@
                             try { await activeProvider.disconnect(); } catch (e) { }
                         }
                         await activeProvider.connect();
+                        // RE-FORCE FeePayer after reconnect
+                        transaction.feePayer = activeProvider.publicKey;
 
-                        // RE-FORCE FeePayer after reconnect (Just in case user clicks again immediately)
-                        // But DO NOT Auto-Retry the signAndSend.
-                        // User wants to click the button ALWAYS.
-
+                        // Manual Retry Request (Silent - No Alert)
                         console.log("Wrapper: Session Refreshed. Requesting Manual Retry.");
-                        alert("Wallet Connection Refreshed.\nPlease click 'CONFIRM' again to proceed.");
-                        throw new Error("Session Refreshed. Please Retry.");
+                        // alert("Wallet Connection Refreshed.\nPlease click 'CONFIRM' again to proceed."); // REMOVED
+                        throw new Error("Session Refreshed. Please click CONFIRM again.");
 
                     } catch (retryErr) {
                         throw new Error("Session Refresh failed: " + (retryErr.message || "Unknown"));
@@ -1613,6 +1626,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T05:10 -->
+<!-- FORCE DEPLOY: 2025-12-30T05:15 -->
 
 </html>
