@@ -601,48 +601,26 @@
             const list = document.getElementById('wallet-list');
             list.innerHTML = '';
 
-            // 0. CONFLICT DETECTION (The "Double Phantom" Problem)
-            // If originalSolana is ALSO Phantom, then Phantom is aggressively claiming the window and blocking others.
-            const isDoublePhantom = window.solana?.isPhantom && window.originalSolana?.isPhantom;
-
-            if (isDoublePhantom) {
-                const conflictDiv = document.createElement('div');
-                conflictDiv.style.background = '#aa0000';
-                conflictDiv.style.color = '#fff';
-                conflictDiv.style.padding = '10px';
-                conflictDiv.style.marginBottom = '10px';
-                conflictDiv.style.border = '2px solid red';
-                conflictDiv.style.fontWeight = 'bold';
-                conflictDiv.style.textAlign = 'center';
-                conflictDiv.innerHTML = `
-                    ⚠️ CRITICAL CONFLICT DETECTED ⚠️<br>
-                    <span style="font-size:11px; font-weight:normal;">
-                    Phantom is aggressively blocking other wallets (Coinbase/Jupiter).<br>
-                    It has overwritten the detection variables twice.<br><br>
-                    <strong>THE FIX:</strong><br>
-                    1. Open Phantom Extension<br>
-                    2. Settings (Gear) > Developer Settings<br>
-                    3. Change <strong>"Default Wallet"</strong> from "Always" to <strong>"Ask Every Time"</strong>.<br>
-                    4. Refresh this page.
+            // 0. CHECK ENVIRONMENT (File vs Localhost)
+            if (window.location.protocol === 'file:') {
+                const fileWarn = document.createElement('div');
+                fileWarn.style.background = '#AA5500';
+                fileWarn.style.color = '#fff';
+                fileWarn.style.padding = '8px';
+                fileWarn.style.marginBottom = '10px';
+                fileWarn.style.border = '1px solid #FF8800';
+                fileWarn.innerHTML = `
+                    ⚠️ <strong>RUNNING ON FILE:// PROTOCOL</strong> ⚠️<br>
+                    <span style="font-size:10px;">
+                    Modern extensions (Coinbase, Jupiter) often <strong>BLOCK</strong> file URLs by default.<br>
+                    Even with permissions enabled, they may fail to inject.<br>
+                    <strong>RECOMMENDATION:</strong> Run this on a local server.<br>
+                    (e.g., <code>npx http-server .</code> or <code>python -m http.server</code>)
                     </span>
                  `;
-                list.appendChild(conflictDiv);
-            } else {
-                // Standard Help
-                const helpDiv = document.createElement('div');
-                helpDiv.style.fontSize = '11px';
-                helpDiv.style.color = '#aaa';
-                helpDiv.style.marginBottom = '10px';
-                helpDiv.style.padding = '8px';
-                helpDiv.style.background = '#220000';
-                helpDiv.style.border = '1px solid #500';
-                helpDiv.innerHTML = `
-                    <strong>MISSING WALLETS?</strong><br>
-                    1. <strong>Local File Issue:</strong> Go to <code>Manage Extensions > Details</code> and enable <strong>"Allow access to file URLs"</strong>.<br>
-                    2. <strong>Phantom Conflict:</strong> Check Phantom Settings > Developer Settings > <strong>"Default Wallet"</strong>.
-                `;
-                list.appendChild(helpDiv);
+                list.appendChild(fileWarn);
             }
+
 
             const providers = [];
             const seenProviders = new Set();
@@ -770,126 +748,6 @@
                 });
             }
 
-            // UNDETECTED / MANUAL SECTION
-            const undetectedDiv = document.createElement('div');
-            undetectedDiv.style.marginTop = '15px';
-            undetectedDiv.style.borderTop = '1px dashed #333';
-            undetectedDiv.style.paddingTop = '10px';
-            undetectedDiv.innerHTML = '<div style="color:#666; font-size:10px; margin-bottom:5px;">UNDETECTED (FORCE TRY):</div>';
-
-            // Filter knownKeys for ones NOT found
-            const missingKeys = knownKeys.filter(k => !detectedKeys.has(k) && !k.includes('solana') && !k.includes('Wallet')); // Simplify list
-            const priorityMissing = ['jupiter', 'coinbaseSolana', 'coinbaseWallet', 'trustwallet']; // Show these first
-
-            priorityMissing.forEach(key => {
-                if (detectedKeys.has(key)) return; // Skip if found
-                const btn = document.createElement('button');
-                btn.innerText = capitalize(key) + " (?)";
-                btn.style.width = '48%';
-                btn.style.margin = '1%';
-                btn.style.padding = '5px';
-                btn.style.background = '#111';
-                btn.style.color = '#555';
-                btn.style.border = '1px solid #333';
-                btn.style.cursor = 'pointer';
-                btn.onclick = () => {
-                    if (window[key]) {
-                        alert(`WAIT! window.${key} actually exists now! Reloading...`);
-                        openWalletSelector();
-                    } else {
-                        alert(`FAILED: window.${key} is undefined.\n\nThe browser extension is NOT injecting this object.\nDouble check "File URL" permissions.`);
-                    }
-                };
-                undetectedDiv.appendChild(btn);
-            });
-            list.appendChild(undetectedDiv);
-
-            // Add Controls
-            const controlsDiv = document.createElement('div');
-            controlsDiv.style.marginTop = '15px';
-            controlsDiv.style.borderTop = '1px dashed #333';
-            controlsDiv.style.paddingTop = '10px';
-
-            // Log to Console Button (The "Developer Way")
-            const logBtn = document.createElement('button');
-            logBtn.innerText = "LOG OBJECTS TO CONSOLE (F12)";
-            logBtn.style.width = '100%';
-            logBtn.style.padding = '8px';
-            logBtn.style.marginBottom = '5px';
-            logBtn.style.background = '#000044';
-            logBtn.style.color = '#aaf';
-            logBtn.style.border = '1px solid #00f';
-            logBtn.onclick = () => {
-                console.group("--- BADSEED WALLET DEBUG ---");
-                console.log("window.solana:", window.solana);
-                console.log("window.originalSolana:", window.originalSolana);
-                console.log("window.coinbaseSolana:", window.coinbaseSolana);
-                console.log("window.coinbaseWallet:", window.coinbaseWallet);
-                console.log("window.jupiter:", window.jupiter);
-                console.log("window.trustwallet:", window.trustwallet);
-                console.log("Standard Adapters:", standardAdapters);
-                console.log("Full Window Keys (Sol/Wallet):", Object.keys(window).filter(k => k.toLowerCase().includes('sol') || k.toLowerCase().includes('wallet')));
-                console.groupEnd();
-                alert("Check your browser console (F12) for raw object details.");
-            };
-            controlsDiv.appendChild(logBtn);
-
-            // Debug
-            const debugBtn = document.createElement('button');
-            debugBtn.id = 'btn-debug-info';
-            debugBtn.innerText = "SHOW DEBUG INFO";
-            debugBtn.style.width = '100%';
-            debugBtn.style.padding = '5px';
-            debugBtn.style.background = '#000';
-            debugBtn.style.color = '#666';
-            debugBtn.style.fontSize = '10px';
-            debugBtn.onclick = () => {
-                let debugHtml = `<div style="text-align:left; font-size:10px; color:#aaa; max-height:150px; overflow-y:auto;">`;
-
-                debugHtml += `<strong>DETECTED STANDARD ADAPTERS:</strong><br>`;
-                if (standardAdapters.length === 0) debugHtml += "None (Event never fired).<br>";
-                else standardAdapters.forEach(a => debugHtml += `- ${a.name}<br>`);
-
-                debugHtml += `<br><strong>WINDOW KEYS CONTAINING "SOL/WALLET/COINBASE/JUPITER":</strong><br>`;
-                const allKeys = Object.keys(window).filter(k =>
-                    k.toLowerCase().includes('sol') ||
-                    k.toLowerCase().includes('wallet') ||
-                    k.toLowerCase().includes('coinbase') ||
-                    k.toLowerCase().includes('jupiter')
-                );
-
-                if (allKeys.length === 0) debugHtml += "None found.<br>";
-                else allKeys.forEach(k => debugHtml += `- window.${k}<br>`);
-
-                debugHtml += `<br><strong>WINDOW.SOLANA FLAGS:</strong><br>`;
-                if (window.solana) {
-                    ['isPhantom', 'isBackpack', 'isSolflare', 'isGlow', 'isTrust', 'isCoinbaseWallet', 'isJupiter'].forEach(f => {
-                        if (window.solana[f]) debugHtml += `- ${f}: TRUE<br>`;
-                    });
-                } else {
-                    debugHtml += "window.solana NOT FOUND<br>";
-                }
-
-                debugHtml += `<br><strong>WINDOW.ORIGINAL-SOLANA FLAGS:</strong><br>`;
-                if (window.originalSolana) {
-                    ['isPhantom', 'isBackpack', 'isSolflare', 'isGlow', 'isTrust', 'isCoinbaseWallet', 'isJupiter'].forEach(f => {
-                        if (window.originalSolana[f]) debugHtml += `- ${f}: TRUE<br>`;
-                    });
-                    if (Object.keys(window.originalSolana).length === 0) debugHtml += "(Object keys empty)";
-                } else {
-                    debugHtml += "window.originalSolana NOT FOUND<br>";
-                }
-
-                debugHtml += `</div>`;
-                const debugContainer = document.createElement('div');
-                debugContainer.innerHTML = debugHtml;
-                list.appendChild(debugContainer);
-                debugBtn.style.display = 'none';
-                clearInterval(window.walletScanInterval); // Stop polling if debug open
-            };
-            controlsDiv.appendChild(debugBtn);
-
-            list.appendChild(controlsDiv);
 
             document.getElementById('wallet-modal').style.display = 'block';
         }
