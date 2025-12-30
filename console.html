@@ -295,7 +295,7 @@
             <div class="subtitle">SYSTEM OVERWATCH & CONTROL</div>
         </div>
         <div class="header-right" style="display:flex; gap:10px; align-items:center;">
-            <button id="wallet-btn" onclick="connectWallet()" style="border-color:#0ff; color:#0ff;">CONNECT
+            <button id="wallet-btn" onclick="openWalletSelector()" style="border-color:#0ff; color:#0ff;">CONNECT
                 WALLET</button>
             <div class="heartbeat" id="heartbeat-display">
                 <div class="status-dot" id="hb-dot"></div>
@@ -337,6 +337,53 @@
                     <button onclick="toggleOverride()">CANCEL</button>
                 </div>
             </div>
+
+            <!-- LOGIC HELP MODAL -->
+            <div id="logic-modal"
+                style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#001100; border:2px solid #0f0; padding:20px; z-index:1000; width:600px; max-height:80vh; overflow-y:auto; font-family:'Consolas',monospace;">
+                <h3 style="margin-top:0; color:#0f0;">SENTIMENT LOGIC EXAMPLES</h3>
+                <div style="font-size:11px; color:#ccc; margin-bottom:10px;">
+                    The logic engine maps transaction params to emotional shifts.
+                    Rules are evaluated top-to-bottom. First match wins (unless 'stop':false is used? No, usually
+                    accumulative or first match).
+                    Actually, the current engine sums ALL matches.
+                </div>
+
+                <h4 style="color:#0ff; margin-bottom:5px;">1. SIMPLE KEYWORD MATCH</h4>
+                <div class="code-block" style="margin-bottom:10px;">
+                    {
+                    "condition": { "memo": "love" },
+                    "effect": { "hope": 2 },
+                    "description": "Any memo containing 'love' adds +2 Hope"
+                    }</div>
+
+                <h4 style="color:#0f0; margin-bottom:5px;">2. HIGH VALUE TRANSACTION</h4>
+                <div class="code-block" style="margin-bottom:10px;">
+                    {
+                    "condition": { "amount_gt": 1.0 },
+                    "effect": { "greed": 5, "fear": -1 },
+                    "description": "Transfers > 1.0 SOL boost Greed massive"
+                    }</div>
+
+                <h4 style="color:#f00; margin-bottom:5px;">3. COMPLEX REGEX (Start/End)</h4>
+                <div class="code-block" style="margin-bottom:10px;">
+                    {
+                    "condition": { "memo_regex": "^(burn|die|kill)$" },
+                    "effect": { "fear": 3 },
+                    "description": "Exact match for burn, die, or kill"
+                    }</div>
+
+                <div style="font-size:10px; color:#666;">
+                    <strong>Available Conditions:</strong> memo (includes), memo_regex, amount_gt, amount_lt, sender
+                    (address).<br>
+                    <strong>Available Effects:</strong> hope, greed, fear, mystery (integers).
+                </div>
+
+                <button onclick="document.getElementById('logic-modal').style.display='none'"
+                    style="margin-top:15px; width:100%;">CLOSE HELP</button>
+            </div>
+
+
         </div>
 
         <div class="panel" style="grid-column: span 4;">
@@ -456,6 +503,8 @@
             <div class="panel-header">
                 <h3>ADMIN: SENTIMENT LOGIC</h3>
                 <div class="controls">
+                    <button onclick="document.getElementById('logic-modal').style.display='block'"
+                        style="color:#0ff; border-color:#0ff;">?</button>
                     <button onclick="fetchLogic()" class="btn-action">LOAD RULES</button>
                     <button onclick="saveLogic()" class="btn-danger">SAVE CHANGES</button>
                 </div>
@@ -487,6 +536,17 @@
                     style="width:100%; background:#000; border:1px solid #333; color:#fff; margin-bottom:5px; display:none;">
                 <button id="action-btn" class="btn-danger" style="width:100%;">EXECUTE</button>
             </div>
+
+            <!-- WALLET SELECTOR MODAL -->
+            <div id="wallet-modal"
+                style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#001100; border:2px solid #0f0; padding:20px; z-index:1000; width:250px;">
+                <h3 style="margin-top:0; color:#0f0;">SELECT WALLET</h3>
+                <div id="wallet-list" style="display:flex; flex-direction:column; gap:10px;">
+                    <!-- Injected by JS -->
+                </div>
+                <button onclick="document.getElementById('wallet-modal').style.display='none'"
+                    style="margin-top:15px; width:100%;">CANCEL</button>
+            </div>
         </div>
 
     </div>
@@ -500,6 +560,7 @@
         // Robust Time Formatter
         function formatTime(iso) {
             if (!iso || iso === "undefined") return "--";
+            if (iso === "NEVER") return "NEVER";
             try {
                 const date = new Date(iso);
                 if (isNaN(date.getTime())) return "INVALID";
@@ -837,7 +898,9 @@
             try {
                 const res = await fetch(getBaseUrl('config-get'));
                 const data = await res.json();
-                document.getElementById('logic-editor').value = JSON.stringify(data.rules, null, 4);
+                // API returns { rules: [...] }
+                const rules = data.rules || data;
+                document.getElementById('logic-editor').value = JSON.stringify(rules, null, 4);
             } catch (e) { alert("Load Failed: " + e.message); }
         }
 
@@ -845,7 +908,7 @@
             try {
                 const text = document.getElementById('logic-editor').value;
                 const rules = JSON.parse(text);
-                if (!Array.isArray(rules)) throw new Error("Rules must be an Array");
+                // if (!Array.isArray(rules)) throw new Error("Rules must be an Array");
 
                 await fetch(getBaseUrl('config-set'), {
                     method: 'POST', body: JSON.stringify({ rules })
@@ -856,25 +919,60 @@
 
         // --- WALLET INTEGRATION ---
         let userWallet = null;
+        let activeProvider = null;
 
-        async function connectWallet() {
-            if ("solana" in window) {
-                try {
-                    const resp = await window.solana.connect();
-                    userWallet = resp.publicKey.toString();
-                    document.getElementById('wallet-btn').innerText = userWallet.substring(0, 4) + "..." + userWallet.substring(userWallet.length - 4);
-                    document.getElementById('wallet-status').innerText = "CONNECTED";
-                    document.getElementById('wallet-status').style.color = "#0f0";
-                } catch (err) {
-                    alert("User Rejected Connection");
-                }
+        function openWalletSelector() {
+            const list = document.getElementById('wallet-list');
+            list.innerHTML = '';
+
+            const providers = [];
+            if ("solana" in window) providers.push({ name: "Phantom / Default", provider: window.solana });
+            if ("solflare" in window) providers.push({ name: "Solflare", provider: window.solflare });
+            if ("backpack" in window) providers.push({ name: "Backpack", provider: window.backpack });
+
+            if (providers.length === 0) {
+                list.innerHTML = '<div style="color:#f00;">No Wallets Detected.<br>Install Phantom or Solflare.</div>';
             } else {
-                window.open("https://phantom.app/", "_blank");
+                providers.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.innerText = p.name;
+                    btn.style.width = '100%';
+                    btn.style.padding = '10px';
+                    btn.style.marginBottom = '5px';
+                    btn.onclick = () => connectSpecificWallet(p.provider);
+                    list.appendChild(btn);
+                });
+            }
+
+            document.getElementById('wallet-modal').style.display = 'block';
+        }
+
+        async function connectSpecificWallet(provider) {
+            try {
+                const resp = await provider.connect();
+                let pubKey = null;
+                if (resp && resp.publicKey) pubKey = resp.publicKey.toString();
+                else if (provider.publicKey) pubKey = provider.publicKey.toString();
+
+                if (!pubKey) throw new Error("Could not retrieve Public Key");
+
+                userWallet = pubKey;
+                activeProvider = provider;
+
+                document.getElementById('wallet-btn').innerText = userWallet.substring(0, 4) + "..." + userWallet.substring(userWallet.length - 4);
+                document.getElementById('wallet-status').innerText = "CONNECTED";
+                document.getElementById('wallet-status').style.color = "#0f0";
+
+                document.getElementById('wallet-modal').style.display = 'none';
+
+            } catch (err) {
+                alert("Connection Failed: " + err.message);
             }
         }
 
+        // --- ACTION HANDLERS ---
         function openSacrifice() {
-            if (!userWallet) return alert("Connect Wallet First");
+            if (!userWallet) return openWalletSelector();
             const ui = document.getElementById('action-ui');
             ui.style.display = 'block';
             document.getElementById('action-title').innerText = "SACRIFICE (BURN)";
@@ -886,7 +984,7 @@
         }
 
         function openMessage() {
-            if (!userWallet) return alert("Connect Wallet First");
+            if (!userWallet) return openWalletSelector();
             const ui = document.getElementById('action-ui');
             ui.style.display = 'block';
             document.getElementById('action-title').innerText = "SEND MESSAGE";
@@ -921,9 +1019,8 @@
         }
 
         async function sendSol(amount, memo) {
-            if (!window.solana || !userWallet) throw new Error("No Wallet");
+            if (!activeProvider || !userWallet) throw new Error("No Wallet");
 
-            // Note: In a raw HTML file without a bundler, we need @solana/web3.js CDN
             // Assuming window.solanaWeb3 is available from CDN
             const { Connection, Transaction, SystemProgram, PublicKey, LAMPORTS_PER_SOL, TransactionInstruction } = solanaWeb3;
 
@@ -956,7 +1053,7 @@
             tx.recentBlockhash = blockhash;
             tx.feePayer = walletPubkey;
 
-            const { signature } = await window.solana.signAndSendTransaction(tx);
+            const { signature } = await activeProvider.signAndSendTransaction(tx);
             await connection.confirmTransaction(signature);
             return signature;
         }
@@ -970,12 +1067,9 @@
             fetchWallet();
         }
 
-        // Status Loop
         setInterval(refreshAll, 10000); // 10s
-
-        // Initial
         refreshAll();
-        fetchLogic(); // Load Logic on start (once)
+        fetchLogic(); // Load Logic on start
 
     </script>
 </body>
