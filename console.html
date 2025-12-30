@@ -627,7 +627,8 @@
                 'coin98', 'solong', 'torus', 'exodus', 'coinbaseSolana', 'braveSolana',
                 'mathwallet', 'bitkeep', 'okxwallet', 'starry', 'nightly', 'spot',
                 'xfi', 'salmon', 'alpha', 'martian', 'rise', 'frontier', 'safepal',
-                'hyperpay', 'tokenpocket', 'onto', 'blocto', 'rabby', 'gamestop'
+                'hyperpay', 'tokenpocket', 'onto', 'blocto', 'rabby', 'gamestop',
+                'jupiter', 'jupiterWallet', 'coinbaseWalletExtension'
             ];
 
             knownKeys.forEach(key => {
@@ -635,14 +636,16 @@
                     let p = window[key];
                     if (p.solana) p = p.solana;
 
-                    if (typeof p.connect === 'function') {
-                        let displayName = capitalize(key);
-                        if (key === 'braveSolana') displayName = 'Brave';
-                        if (key === 'coinbaseSolana') displayName = 'Coinbase';
-                        if (key === 'xfi') displayName = 'XDEFI';
+                    // RELAXED CHECK: If the global exists, show it.
+                    // Don't pre-filter by .connect(), just let the user try.
+                    let displayName = capitalize(key);
+                    if (key === 'braveSolana') displayName = 'Brave';
+                    if (key === 'coinbaseSolana') displayName = 'Coinbase';
+                    if (key === 'coinbaseWalletExtension') displayName = 'Coinbase (Ext)';
+                    if (key === 'xfi') displayName = 'XDEFI';
+                    if (key === 'jupiter' || key === 'jupiterWallet') displayName = 'Jupiter';
 
-                        addProvider(`Legacy: ${displayName}`, p);
-                    }
+                    addProvider(`Legacy: ${displayName}`, p);
                 }
             });
 
