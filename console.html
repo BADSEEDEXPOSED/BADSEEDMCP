@@ -1267,8 +1267,16 @@
             document.getElementById('action-input-2').placeholder = "Input Mint (Default: SOL)";
             document.getElementById('action-input-2').value = SOL_MINT;
 
-            document.getElementById('action-btn').innerText = "SACRIFICE (SWAP TO BURN)";
+            document.getElementById('action-btn').innerText = "CONFIRM SACRIFICE";
             document.getElementById('action-btn').onclick = executeSacrifice;
+
+            // Add Cancel if not exists (or show it)
+            // Ideally the UI should have a permanent cancel button, but for now let's just ensure the overlay closes on background click
+            // Actually, let's change the close button (top right) to be more visible?
+            // User asked for "Accept Buttons".
+            // Let's make the main button GREEN.
+            document.getElementById('action-btn').style.background = "#0f0";
+            document.getElementById('action-btn').style.color = "#000";
         }
 
         function openMessage() {
@@ -1599,6 +1607,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T04:35 -->
+<!-- FORCE DEPLOY: 2025-12-30T04:40 -->
 
 </html>
