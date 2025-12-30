@@ -591,173 +591,94 @@
             } catch (e) { return "ERROR"; }
         }
 
-        // ... (REST OF CODE) ...
+        // --- WALLET SUPPORT (OFFICIAL ADAPTER LOGIC MIMIC) ---
 
-        // --- WALLET INTEGRATION ---
-        let userWallet = null;
-        let activeProvider = null;
+        // Polling interval for wallet injection
+        let walletInterval = null;
 
         function openWalletSelector() {
             const list = document.getElementById('wallet-list');
+            list.innerHTML = '<div style="color:#666; font-size:10px; padding:10px;">Scanning for wallets...</div>';
+            document.getElementById('wallet-modal').style.display = 'block';
+
+            // Start polling for wallets (mimics React Adapter's behavior)
+            refreshWalletList();
+
+            // Allow manual refresh
+            if (!document.getElementById('scan-btn')) {
+                const scanBtn = document.createElement('button');
+                scanBtn.id = 'scan-btn';
+                scanBtn.innerText = "REFRESH LIST";
+                scanBtn.style.marginTop = '10px';
+                scanBtn.style.width = '100%';
+                scanBtn.onclick = refreshWalletList;
+                document.getElementById('wallet-list').parentElement.appendChild(scanBtn);
+            }
+        }
+
+        function refreshWalletList() {
+            const list = document.getElementById('wallet-list');
             list.innerHTML = '';
 
-            // 0. ENVIRONMENT WARNING (Removed for Localhost parity, but keep check if needed)
-            // User confirmed localhost, so we skip the scary file:// warn for now.
+            const detected = new Map(); // Name -> Provider info
 
-            const detectedKeys = new Set();
-            const providers = [];
-            const seenProviders = new Set();
-
-            function addProvider(name, provider, isStandard = false) {
-                if (!provider || seenProviders.has(provider)) return;
-                seenProviders.add(provider);
-                detectedKeys.add(name.toLowerCase());
-                providers.push({ name: name, provider: provider, isStandard: isStandard });
-            }
-
-            // 1. MODERN STANDARD (navigator.wallets) - The "React Adapter" way
+            // 1. MODERN STANDARD (navigator.wallets)
             if (window.navigator && window.navigator.wallets) {
                 const wallets = window.navigator.wallets.get();
-                wallets.forEach(wallet => {
-                    addProvider(wallet.name, wallet, true);
-                });
-                // Listen for future injections
-                window.navigator.wallets.on('register', (wallet) => addProvider(wallet.name, wallet, true));
-            }
-
-            // 1b. LEGACY STANDARD (register-wallet event)
-            if (typeof standardAdapters !== 'undefined') {
-                standardAdapters.forEach(adapter => {
-                    addProvider(`Standard: ${adapter.name}`, adapter, true);
+                wallets.forEach(w => {
+                    if (!detected.has(w.name)) {
+                        detected.set(w.name, { name: w.name, provider: w, type: 'start' });
+                    }
                 });
             }
 
-            // 2. LEGACY WINDOW INJECTION (window.solana, window.jupiter, etc)
-            const legacyMap = [
-                { key: 'solana', name: 'Phantom', check: p => p.isPhantom },
-                { key: 'solana', name: 'Solflare', check: p => p.isSolflare },
-                { key: 'solana', name: 'Backpack', check: p => p.isBackpack },
-                { key: 'solana', name: 'Trust Wallet', check: p => p.isTrust },
-                { key: 'solana', name: 'Coinbase Wallet', check: p => p.isCoinbaseWallet },
-                { key: 'solana', name: 'Jupiter', check: p => p.isJupiter },
-                { key: 'jupiter', name: 'Jupiter' },
-                { key: 'jupiterWallet', name: 'Jupiter' },
-                { key: 'coinbaseSolana', name: 'Coinbase' },
-                { key: 'coinbaseWallet', name: 'Coinbase' },
-                { key: 'coinbase', name: 'Coinbase' },
-                { key: 'trustwallet', name: 'Trust Wallet' },
-                { key: 'backpack', name: 'Backpack' },
-                { key: 'solflare', name: 'Solflare' }
-            ];
+            // 2. LEGACY INJECTIONS (The "Guts" of legacy adapters)
+            // We check specific globals that known wallets use.
+            if (window.solana && window.solana.isPhantom) detected.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
+            if (window.solflare && window.solflare.isSolflare) detected.set('Solflare', { name: 'Solflare', provider: window.solflare, type: 'legacy' });
+            if (window.jupiter) detected.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
+            if (window.coinbaseSolana) detected.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
+            if (window.backpack) detected.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
+            if (window.trustwallet) detected.set('Trust', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
 
-            legacyMap.forEach(item => {
-                if (window[item.key]) {
-                    let p = window[item.key];
-                    if (item.check && !item.check(p)) return; // Skip if specific flag missing
-                    addProvider(item.name, p, false);
-                }
-            });
+            // 3. RENDER
+            if (detected.size === 0) {
+                list.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No Solana Wallets Found.<br>Please install Phantom, Solflare, or Jupiter.</div>';
 
-            // 3. RENDER WALLETS
+                return;
+            }
 
-            // MAJOR WALLETS (Always show even if manual)
-            const majors = [
-                { id: 'phantom', name: 'Phantom', check: ['solana'] },
-                { id: 'solflare', name: 'Solflare', check: ['solflare', 'solana'] },
-                { id: 'jupiter', name: 'Jupiter', check: ['jupiter', 'jupiterWallet'] },
-                { id: 'coinbase', name: 'Coinbase', check: ['coinbaseSolana', 'coinbaseWallet', 'coinbase'] },
-                { id: 'trust', name: 'Trust Wallet', check: ['trustwallet', 'trustWallet'] },
-                { id: 'backpack', name: 'Backpack', check: ['backpack'] }
-            ];
-
-            majors.forEach(w => {
-                // Find if detected
-                const found = providers.find(p => p.name.toLowerCase().includes(w.name.toLowerCase()));
-                const isDetected = !!found;
-                const provider = found ? found.provider : null;
-                const isStandard = found ? found.isStandard : false;
-
+            detected.forEach((wallet) => {
                 const btn = document.createElement('button');
                 btn.style.width = '100%';
-                btn.style.padding = '12px 15px';
                 btn.style.marginBottom = '8px';
-                btn.style.border = isDetected ? '1px solid #0f0' : '1px solid #333';
-                btn.style.background = isDetected ? '#002200' : '#111';
-                btn.style.color = isDetected ? '#0f0' : '#666';
+                btn.style.padding = '12px';
+                btn.style.background = '#002200';
+                btn.style.border = '1px solid #0f0';
+                btn.style.color = '#0f0';
                 btn.style.cursor = 'pointer';
                 btn.style.display = 'flex';
                 btn.style.justifyContent = 'space-between';
                 btn.style.alignItems = 'center';
-                btn.style.fontWeight = 'bold';
-                btn.style.fontSize = '12px';
+                btn.style.fontFamily = 'Courier New';
 
-                // Icon (Emoji approximation)
-                let icon = '🔌';
-                if (w.id === 'phantom') icon = '👻';
-                if (w.id === 'jupiter') icon = '🪐';
-                if (w.id === 'solflare') icon = '☀️';
-                if (w.id === 'coinbase') icon = '🔵';
+                // SVG Icon Placeholder
+                const iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>`;
 
                 btn.innerHTML = `
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <span style="font-size:16px;">${icon}</span>
-                        <span>${w.name}</span>
+                        ${iconSvg}
+                        <span style="font-weight:bold; font-size:14px;">${wallet.name}</span>
                     </div>
-                    <span style="font-size:10px; color:${isDetected ? '#0f0' : '#444'}">
-                        ${isDetected ? 'DETECTED' : 'MANUAL'}
-                    </span>
+                    <span style="font-size:9px; color:#484;">${wallet.type === 'standard' ? 'STD' : 'INJECTED'}</span>
                 `;
 
                 btn.onclick = () => {
-                    if (isDetected) {
-                        if (isStandard) connectStandardWallet(provider);
-                        else connectSpecificWallet(provider);
-                    } else {
-                        // STRICT MANUAL LOGIC
-                        let target = null;
-                        if (w.id === 'jupiter') target = window.jupiter || window.jupiterWallet;
-                        else if (w.id === 'coinbase') target = window.coinbaseSolana || window.coinbaseWallet || window.coinbase;
-                        else if (w.id === 'solflare') target = window.solflare || (window.solana?.isSolflare ? window.solana : null);
-                        else if (w.id === 'phantom') target = window.solana;
-
-                        if (target) {
-                            alert(`Late Detection: Found ${w.name}! Connecting...`);
-                            connectSpecificWallet(target);
-                        } else {
-                            alert(`❌ ERROR: Could not find ${w.name} provider.\n\nIt is not injected into the window.\nCheck if the extension is enabled.`);
-                        }
-                    }
+                    if (wallet.type === 'standard') connectStandardWallet(wallet.provider);
+                    else connectSpecificWallet(wallet.provider);
                 };
                 list.appendChild(btn);
             });
-
-            // 4. RENDER UNKNOWN DETECTED WALLETS
-            providers.forEach(p => {
-                const isMajor = majors.some(m => p.name.toLowerCase().includes(m.name.toLowerCase()));
-                if (!isMajor) {
-                    const btn = document.createElement('button');
-                    btn.innerText = `Other: ${p.name}`;
-                    btn.style.width = '100%';
-                    btn.style.padding = '12px';
-                    btn.style.marginBottom = '8px';
-                    btn.style.background = '#002200';
-                    btn.style.color = '#0f0';
-                    btn.style.border = '1px solid #0f0';
-                    btn.style.cursor = 'pointer';
-
-                    btn.onclick = () => {
-                        if (p.isStandard) connectStandardWallet(p.provider);
-                        else connectSpecificWallet(p.provider);
-                    };
-                    list.appendChild(btn);
-                }
-            });
-
-            document.getElementById('wallet-modal').style.display = 'block';
-        }
-
-        function capitalize(s) {
-            return s.charAt(0).toUpperCase() + s.slice(1);
         }
 
         async function connectStandardWallet(adapter) {
@@ -1253,6 +1174,6 @@
         fetchLogic(); // Load Logic on start
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T01:30 -->
+<!-- FORCE DEPLOY: 2025-12-30T01:50 -->
 
 </html>
