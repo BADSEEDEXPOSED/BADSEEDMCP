@@ -592,7 +592,7 @@
             } catch (e) { return "ERROR"; }
         }
 
-        // --- WALLET SUPPORT (COMPREHENSIVE JUPITER DETECTION) ---
+        // --- WALLET SUPPORT (In-Depth Diagnostic Mode) ---
 
         let userWallet = null;
         let activeProvider = null;
@@ -601,6 +601,32 @@
         const accumulatedWallets = new Map();
         let standardListenerAttached = false;
 
+        // DIAGNOSTIC TOOL
+        function scanWindowForWallets() {
+            console.log("BADSEED DIAGNOSTIC: BEGIN SCAN");
+            try {
+                const keys = Object.keys(window);
+                keys.forEach(k => {
+                    if (/jupiter|solana|wallet|phantom/i.test(k)) {
+                        console.log("BADSEED DIAGNOSTIC: Found window key:", k);
+                        if (window[k] && typeof window[k] === 'object') {
+                            try {
+                                console.log("  -> Props:", Object.keys(window[k]).slice(0, 10));
+                            } catch (e) { }
+                        }
+                    }
+                });
+            } catch (e) { console.error("Scan error", e); }
+
+            if (window.solana) {
+                console.log("BADSEED DIAGNOSTIC: window.solana EXPLICIT CHECK");
+                console.log("  -> isPhantom:", window.solana.isPhantom);
+                console.log("  -> isJupiter:", window.solana.isJupiter);
+                console.log("  -> isSolflare:", window.solana.isSolflare);
+            }
+            console.log("BADSEED DIAGNOSTIC: END SCAN");
+        }
+
         function openWalletSelector() {
             const list = document.getElementById('wallet-list');
             list.innerHTML = '<div style="color:#666; font-size:10px; padding:10px;">Scanning for wallets...</div>';
@@ -608,11 +634,14 @@
 
             // Initial scan
             refreshWalletList();
+            scanWindowForWallets(); // Run once immediately
 
             // Aggressive polling
             let attempts = 0;
             const poller = setInterval(() => {
                 refreshWalletList();
+                if (attempts % 4 === 0) scanWindowForWallets(); // Scan every 2s
+
                 attempts++;
                 if (attempts > 20) {
                     clearInterval(poller);
@@ -1380,6 +1409,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T03:00 -->
+<!-- FORCE DEPLOY: 2025-12-30T03:10 -->
 
 </html>
