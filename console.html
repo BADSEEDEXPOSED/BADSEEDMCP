@@ -668,11 +668,8 @@
             try {
                 if (window.navigator && window.navigator.wallets) {
                     const wallets = window.navigator.wallets.get();
-                    console.log("BADSEED: Standard Wallets API found, count:", wallets.length, wallets);
-
                     wallets.forEach(wallet => {
                         if (!accumulatedWallets.has(wallet.name)) {
-                            console.log("BADSEED: Adding Standard wallet:", wallet.name, wallet);
                             accumulatedWallets.set(wallet.name, {
                                 name: wallet.name,
                                 provider: wallet,
@@ -684,7 +681,6 @@
                     // Attach listener once
                     if (!standardListenerAttached && window.navigator.wallets.on) {
                         window.navigator.wallets.on('register', (wallet) => {
-                            console.log("BADSEED: Wallet registered event:", wallet.name);
                             if (!accumulatedWallets.has(wallet.name)) {
                                 accumulatedWallets.set(wallet.name, {
                                     name: wallet.name,
@@ -696,134 +692,63 @@
                         });
                         standardListenerAttached = true;
                     }
-                } else {
-                    console.log("BADSEED: window.navigator.wallets NOT available");
                 }
             } catch (e) {
                 console.error("BADSEED: Standard wallet detection error:", e);
             }
 
             // === LEGACY WALLET DETECTION ===
-            console.log("BADSEED: Checking legacy injections...");
 
-            // Phantom
-            if (window.solana && window.solana.isPhantom) {
-                console.log("BADSEED: Phantom detected via window.solana");
-                accumulatedWallets.set('Phantom', {
-                    name: 'Phantom',
-                    provider: window.solana,
-                    type: 'legacy'
+            // 1. Check for Conflicts (Multiple Wallets)
+            if (window.solana && window.solana.providers) {
+                console.log("BADSEED: Detected window.solana.providers array");
+                window.solana.providers.forEach(p => {
+                    if (p.isPhantom) accumulatedWallets.set('Phantom', { name: 'Phantom', provider: p, type: 'legacy' });
+                    if (p.isJupiter) accumulatedWallets.set('Jupiter', { name: 'Jupiter', provider: p, type: 'legacy' });
                 });
             }
 
-            // Jupiter - Multiple detection methods
-            let jupiterFound = false;
+            // 2. Explicit Global Checks
+            if (window.solana && window.solana.isPhantom) accumulatedWallets.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
+            if (window.jupiter) accumulatedWallets.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
+            if (window.solflare || (window.solana && window.solana.isSolflare)) {
+                accumulatedWallets.set('Solflare', { name: 'Solflare', provider: window.solflare || window.solana, type: 'legacy' });
+            }
+            if (window.backpack) accumulatedWallets.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
+            if (window.coinbaseSolana) accumulatedWallets.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
+            if (window.trustwallet) accumulatedWallets.set('Trust Wallet', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
+            if (window.braveSolana) accumulatedWallets.set('Brave Wallet', { name: 'Brave Wallet', provider: window.braveSolana, type: 'legacy' });
 
-            // Method 1: window.jupiter
-            if (window.jupiter) {
-                console.log("BADSEED: Jupiter found via window.jupiter", window.jupiter);
+            // 3. FORCE JUPITER (If not found yet) - USER REQUIREMENT
+            if (!accumulatedWallets.has('Jupiter')) {
+                console.log("BADSEED: Forcing Jupiter into list (Fallback Mode)");
                 accumulatedWallets.set('Jupiter', {
                     name: 'Jupiter',
-                    provider: window.jupiter,
-                    type: 'legacy'
-                });
-                jupiterFound = true;
-            }
-
-            // Method 2: Check if window.solana is Jupiter
-            if (!jupiterFound && window.solana && window.solana.isJupiter) {
-                console.log("BADSEED: Jupiter found via window.solana.isJupiter");
-                accumulatedWallets.set('Jupiter', {
-                    name: 'Jupiter',
-                    provider: window.solana,
-                    type: 'legacy'
-                });
-                jupiterFound = true;
-            }
-
-            // Method 3: Check window.jup (alternative)
-            if (!jupiterFound && window.jup) {
-                console.log("BADSEED: Jupiter found via window.jup");
-                accumulatedWallets.set('Jupiter', {
-                    name: 'Jupiter',
-                    provider: window.jup,
-                    type: 'legacy'
-                });
-                jupiterFound = true;
-            }
-
-            if (!jupiterFound) {
-                console.log("BADSEED: Jupiter NOT detected. Checked: window.jupiter, window.solana.isJupiter, window.jup");
-            }
-
-            // Solflare
-            if (window.solflare) {
-                console.log("BADSEED: Solflare detected via window.solflare");
-                accumulatedWallets.set('Solflare', {
-                    name: 'Solflare',
-                    provider: window.solflare,
-                    type: 'legacy'
-                });
-            } else if (window.solana && window.solana.isSolflare) {
-                console.log("BADSEED: Solflare detected via window.solana.isSolflare");
-                accumulatedWallets.set('Solflare', {
-                    name: 'Solflare',
-                    provider: window.solana,
-                    type: 'legacy'
+                    provider: null, // Will try to find it on click
+                    type: 'manual'
                 });
             }
-
-            // Backpack
-            if (window.backpack) {
-                console.log("BADSEED: Backpack detected");
-                accumulatedWallets.set('Backpack', {
-                    name: 'Backpack',
-                    provider: window.backpack,
-                    type: 'legacy'
-                });
-            }
-
-            // Brave
-            if (window.braveSolana) {
-                console.log("BADSEED: Brave Wallet detected");
-                accumulatedWallets.set('Brave Wallet', {
-                    name: 'Brave Wallet',
-                    provider: window.braveSolana,
-                    type: 'legacy'
-                });
-            }
-
-            // Trust Wallet
-            if (window.trustwallet) {
-                console.log("BADSEED: Trust Wallet detected");
-                accumulatedWallets.set('Trust Wallet', {
-                    name: 'Trust Wallet',
-                    provider: window.trustwallet,
-                    type: 'legacy'
-                });
-            }
-
-            // Coinbase
-            if (window.coinbaseSolana) {
-                console.log("BADSEED: Coinbase detected");
-                accumulatedWallets.set('Coinbase', {
-                    name: 'Coinbase',
-                    provider: window.coinbaseSolana,
-                    type: 'legacy'
-                });
-            }
-
-            console.log("BADSEED: Total wallets accumulated:", accumulatedWallets.size);
 
             // === RENDER ===
-            if (accumulatedWallets.size === 0) {
-                if (!list.innerHTML.includes("button") && !list.innerHTML.includes("Scanning"))
-                    list.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No Wallets Found.<br>Scanning...</div>';
+            list.innerHTML = '';
+
+            // Sort to ensure Jupiter and Phantom are at top if present
+            const sortedWallets = Array.from(accumulatedWallets.values()).sort((a, b) => {
+                const priority = ['Jupiter', 'Phantom', 'Solflare', 'Backpack'];
+                const aIdx = priority.indexOf(a.name);
+                const bIdx = priority.indexOf(b.name);
+                if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+                if (aIdx !== -1) return -1;
+                if (bIdx !== -1) return 1;
+                return 0; // Keep insertion order
+            });
+
+            if (sortedWallets.length === 0) {
+                list.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No Wallets Found.<br>Scanning...</div>';
                 return;
             }
 
-            list.innerHTML = '';
-            accumulatedWallets.forEach((wallet) => {
+            sortedWallets.forEach((wallet) => {
                 const btn = document.createElement('button');
                 btn.style.width = '100%';
                 btn.style.marginBottom = '8px';
@@ -838,12 +763,32 @@
                 btn.style.fontFamily = 'Courier New';
 
                 const iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h.01M10 12h.01M14 12h.01M18 12h.01"/></svg>`;
-                btn.innerHTML = `<div style="display:flex; align-items:center; gap:10px;">${iconSvg}<span style="font-weight:bold; font-size:14px;">${wallet.name}</span></div><span style="font-size:9px; color:#888;">Detected</span>`;
+
+                let detectedText = "Detected";
+                if (wallet.type === 'manual') detectedText = "Connect"; // Honest fallback text
+
+                btn.innerHTML = `<div style="display:flex; align-items:center; gap:10px;">${iconSvg}<span style="font-weight:bold; font-size:14px;">${wallet.name}</span></div><span style="font-size:9px; color:#888;">${detectedText}</span>`;
 
                 btn.onclick = () => {
-                    console.log("BADSEED: Attempting to connect to", wallet.name);
-                    if (wallet.type === 'standard') connectStandardWallet(wallet);
-                    else connectLegacyWallet(wallet);
+                    console.log("BADSEED: Connecting to", wallet.name, wallet.type);
+                    if (wallet.type === 'standard') {
+                        connectStandardWallet(wallet);
+                    } else if (wallet.type === 'legacy') {
+                        connectLegacyWallet(wallet);
+                    } else if (wallet.type === 'manual') {
+                        // MANUAL FALLBACK LOGIC
+                        if (window.jupiter) {
+                            connectLegacyWallet({ name: 'Jupiter', provider: window.jupiter });
+                        } else if (window.solana && window.solana.isJupiter) {
+                            connectLegacyWallet({ name: 'Jupiter', provider: window.solana });
+                        } else {
+                            // Last ditch: just try window.solana and hope it's the default
+                            if (confirm("Jupiter wallet not explicitly detected. Try connecting via default Solana provider?")) {
+                                if (window.solana) connectLegacyWallet({ name: 'Default', provider: window.solana });
+                                else alert("No Solana wallet found!");
+                            }
+                        }
+                    }
                 };
                 list.appendChild(btn);
             });
