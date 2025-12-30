@@ -555,6 +555,19 @@
     <script>
         const BASE_URL = "https://badseed.netlify.app/.netlify/functions";
 
+        // --- WALLET STANDARD SUPPORT (The "Future Proof" Protocol) ---
+        const standardAdapters = [];
+        try {
+            function onWalletRegistered(event) {
+                const { register } = event.detail;
+                register((adapter) => {
+                    standardAdapters.push(adapter);
+                });
+            }
+            window.addEventListener('register-wallet', onWalletRegistered);
+            // Push any that already fired (if supported by browser env)
+        } catch (e) { console.error("Wallet Standard Error", e); }
+
         // --- UTILS ---
         function getBaseUrl(endpoint) { return `${BASE_URL}/${endpoint}`; }
         // Robust Time Formatter
@@ -571,6 +584,157 @@
                 if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
                 return date.toLocaleDateString();
             } catch (e) { return "ERROR"; }
+        }
+
+        // ... (REST OF CODE) ...
+
+        // --- WALLET INTEGRATION ---
+        let userWallet = null;
+        let activeProvider = null;
+
+        function openWalletSelector() {
+            const list = document.getElementById('wallet-list');
+            list.innerHTML = '';
+
+            const providers = [];
+            const seenProviders = new Set();
+
+            function addProvider(name, provider, isStandard = false) {
+                if (!provider || seenProviders.has(provider)) return;
+                seenProviders.add(provider);
+                providers.push({ name: name, provider: provider, isStandard: isStandard });
+            }
+
+            // 1. WALLET STANDARD ADAPTERS (Modern/Future)
+            standardAdapters.forEach(adapter => {
+                addProvider(`Standard: ${adapter.name}`, adapter, true);
+            });
+
+            // 2. STANDARD INJECTION (window.solana)
+            if (window.solana) {
+                let name = "Legacy Injection";
+                if (window.solana.isPhantom) name = "Phantom";
+                if (window.solana.isBackpack) name = "Backpack";
+                if (window.solana.isSolflare) name = "Solflare";
+                if (window.solana.isGlow) name = "Glow";
+                if (window.solana.isTrust) name = "Trust Wallet";
+                addProvider(name, window.solana);
+            }
+
+            // 3. EXPLICIT KNOWN NAMESPACES 
+            const knownKeys = [
+                'phantom', 'solflare', 'backpack', 'trustwallet', 'glow', 'slope', 'clover',
+                'coin98', 'solong', 'torus', 'exodus', 'coinbaseSolana', 'braveSolana',
+                'mathwallet', 'bitkeep', 'okxwallet', 'starry', 'nightly', 'spot',
+                'xfi', 'salmon', 'alpha', 'martian', 'rise', 'frontier', 'safepal'
+            ];
+
+            knownKeys.forEach(key => {
+                if (window[key]) {
+                    let p = window[key];
+                    if (p.solana) p = p.solana;
+
+                    if (typeof p.connect === 'function') {
+                        let displayName = capitalize(key);
+                        if (key === 'braveSolana') displayName = 'Brave';
+                        if (key === 'coinbaseSolana') displayName = 'Coinbase';
+                        if (key === 'xfi') displayName = 'XDEFI';
+
+                        addProvider(`Legacy: ${displayName}`, p);
+                    }
+                }
+            });
+
+            // 4. AGGRESSIVE HEURISTIC SCAN
+            const ignore = new Set(['solana', 'parent', 'self', 'top', 'frames', 'opener', 'window', 'document', 'external', 'chrome', 'performance', 'console', 'location', 'history', 'navigator', 'screen', 'localStorage', 'sessionStorage', 'customElements', 'styleMedia', 'speechSynthesis', 'crypto', 'indexedDB']);
+
+            Object.keys(window).forEach(key => {
+                if (ignore.has(key) || knownKeys.includes(key)) return;
+                try {
+                    const candidate = window[key];
+                    if (candidate && typeof candidate === 'object') {
+                        if (typeof candidate.connect === 'function') {
+                            const hasSign = candidate.signTransaction || candidate.signAndSendTransaction || candidate.signMessage;
+                            if (hasSign) {
+                                addProvider(`Unknown: ${capitalize(key)}`, candidate);
+                            }
+                        }
+                    }
+                } catch (e) { }
+            });
+
+            if (providers.length === 0) {
+                list.innerHTML = '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Standard & Legacy scans empty)</span></div>';
+            } else {
+                providers.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.innerText = p.name.toUpperCase();
+                    btn.style.width = '100%';
+                    btn.style.padding = '12px';
+                    btn.style.marginBottom = '8px';
+                    btn.style.background = '#002200';
+                    btn.style.color = '#0f0';
+                    btn.style.border = '1px solid #0f0';
+                    btn.style.cursor = 'pointer';
+
+                    if (p.isStandard) {
+                        btn.onclick = () => connectStandardWallet(p.provider);
+                    } else {
+                        btn.onclick = () => connectSpecificWallet(p.provider);
+                    }
+
+                    list.appendChild(btn);
+                });
+            }
+
+            document.getElementById('wallet-modal').style.display = 'block';
+        }
+
+        function capitalize(s) {
+            return s.charAt(0).toUpperCase() + s.slice(1);
+        }
+
+        async function connectStandardWallet(adapter) {
+            try {
+                await adapter.connect();
+                const pubKey = adapter.publicKey.toString();
+
+                userWallet = pubKey;
+                // Standard adapters have different API for signing?
+                // Actually most map 'signAndSendTransaction' or we use adapter.signIn()
+                // For this simple console, we wrap it or treat it as provider if API matches.
+                // Standard Adapter API: adapter.connect(), adapter.signTransaction(), adapter.signAndSendTransaction()
+                // It usually matches.
+                activeProvider = adapter;
+
+                updateWalletUI(pubKey);
+            } catch (e) { alert("Standard Connection Failed: " + e.message); }
+        }
+
+        async function connectSpecificWallet(provider) {
+            try {
+                const resp = await provider.connect();
+                let pubKey = null;
+                if (resp && resp.publicKey) pubKey = resp.publicKey.toString();
+                else if (provider.publicKey) pubKey = provider.publicKey.toString();
+
+                if (!pubKey) throw new Error("Could not retrieve Public Key");
+
+                userWallet = pubKey;
+                activeProvider = provider;
+
+                updateWalletUI(pubKey);
+
+            } catch (err) {
+                alert("Connection Failed: " + err.message);
+            }
+        }
+
+        function updateWalletUI(pubKey) {
+            document.getElementById('wallet-btn').innerText = pubKey.substring(0, 4) + "..." + pubKey.substring(pubKey.length - 4);
+            document.getElementById('wallet-status').innerText = "CONNECTED";
+            document.getElementById('wallet-status').style.color = "#0f0";
+            document.getElementById('wallet-modal').style.display = 'none';
         }
 
         // --- FETCHERS ---
