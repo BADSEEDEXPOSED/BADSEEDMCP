@@ -6,6 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BADSEED // GOD MODE CONSOLE</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script>
+        // --- WALLET STANDARD SUPPORT (EARLY BINDING) ---
+        // Moved to HEAD to catch events that fire before BODY loads
+        const standardAdapters = [];
+        try {
+            function onWalletRegistered(event) {
+                const { register } = event.detail;
+                register((adapter) => {
+                    standardAdapters.push(adapter);
+                    // Dispatch custom event to notify UI if needed
+                    window.dispatchEvent(new Event('wallet-standard-updated'));
+                });
+            }
+            window.addEventListener('register-wallet', onWalletRegistered);
+        } catch (e) { console.error("Standard Wallet Init Error", e); }
+    </script>
     <style>
         body {
             background-color: #000;
@@ -555,18 +571,7 @@
     <script>
         const BASE_URL = "https://badseed.netlify.app/.netlify/functions";
 
-        // --- WALLET STANDARD SUPPORT (The "Future Proof" Protocol) ---
-        const standardAdapters = [];
-        try {
-            function onWalletRegistered(event) {
-                const { register } = event.detail;
-                register((adapter) => {
-                    standardAdapters.push(adapter);
-                });
-            }
-            window.addEventListener('register-wallet', onWalletRegistered);
-            // Push any that already fired (if supported by browser env)
-        } catch (e) { console.error("Wallet Standard Error", e); }
+        // (Standard Listener moved to HEAD)
 
         // --- UTILS ---
         function getBaseUrl(endpoint) { return `${BASE_URL}/${endpoint}`; }
@@ -613,6 +618,7 @@
 
             const providers = [];
             const seenProviders = new Set();
+            const detectedKeys = new Set();
 
             function addProvider(name, provider, isStandard = false) {
                 if (!provider || seenProviders.has(provider)) return;
@@ -621,9 +627,13 @@
             }
 
             // 1. WALLET STANDARD ADAPTERS (Modern/Future)
-            standardAdapters.forEach(adapter => {
-                addProvider(`Standard: ${adapter.name}`, adapter, true);
-            });
+            // standardAdapters is now a global variable, assumed to be defined elsewhere (e.g., in <head>)
+            if (typeof standardAdapters !== 'undefined') {
+                standardAdapters.forEach(adapter => {
+                    addProvider(`Standard: ${adapter.name}`, adapter, true);
+                });
+            }
+
 
             // 2. STANDARD INJECTION (window.solana)
             if (window.solana) {
@@ -662,6 +672,7 @@
 
             knownKeys.forEach(key => {
                 if (window[key]) {
+                    detectedKeys.add(key);
                     let p = window[key];
                     if (p.solana) p = p.solana;
 
@@ -708,7 +719,7 @@
             });
 
             if (providers.length === 0) {
-                list.innerHTML = '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Deep scan found 0 objects with .connect())</span></div>';
+                list.innerHTML += '<div style="color:#f00; text-align:center;">NO WALLETS DETECTED<br><span style="font-size:10px; color:#666;">(Deep scan found 0 objects with .connect())</span></div>';
             } else {
                 providers.forEach(p => {
                     const btn = document.createElement('button');
@@ -730,6 +741,40 @@
                     list.appendChild(btn);
                 });
             }
+
+            // UNDETECTED / MANUAL SECTION
+            const undetectedDiv = document.createElement('div');
+            undetectedDiv.style.marginTop = '15px';
+            undetectedDiv.style.borderTop = '1px dashed #333';
+            undetectedDiv.style.paddingTop = '10px';
+            undetectedDiv.innerHTML = '<div style="color:#666; font-size:10px; margin-bottom:5px;">UNDETECTED (FORCE TRY):</div>';
+
+            // Filter knownKeys for ones NOT found
+            const missingKeys = knownKeys.filter(k => !detectedKeys.has(k) && !k.includes('solana') && !k.includes('Wallet')); // Simplify list
+            const priorityMissing = ['jupiter', 'coinbaseSolana', 'coinbaseWallet', 'trustwallet']; // Show these first
+
+            priorityMissing.forEach(key => {
+                if (detectedKeys.has(key)) return; // Skip if found
+                const btn = document.createElement('button');
+                btn.innerText = capitalize(key) + " (?)";
+                btn.style.width = '48%';
+                btn.style.margin = '1%';
+                btn.style.padding = '5px';
+                btn.style.background = '#111';
+                btn.style.color = '#555';
+                btn.style.border = '1px solid #333';
+                btn.style.cursor = 'pointer';
+                btn.onclick = () => {
+                    if (window[key]) {
+                        alert(`WAIT! window.${key} actually exists now! Reloading...`);
+                        openWalletSelector();
+                    } else {
+                        alert(`FAILED: window.${key} is undefined.\n\nThe browser extension is NOT injecting this object.\nDouble check "File URL" permissions.`);
+                    }
+                };
+                undetectedDiv.appendChild(btn);
+            });
+            list.appendChild(undetectedDiv);
 
             // Add Controls
             const controlsDiv = document.createElement('div');
