@@ -728,13 +728,9 @@
             rescan.style.width = '100%';
             rescan.style.padding = '8px';
             rescan.style.marginBottom = '5px';
-            rescan.style.background = '#333';
-            rescan.style.color = '#fff';
-            rescan.onclick = openWalletSelector;
-            controlsDiv.appendChild(rescan);
-
             // Debug
             const debugBtn = document.createElement('button');
+            debugBtn.id = 'btn-debug-info';
             debugBtn.innerText = "SHOW DEBUG INFO";
             debugBtn.style.width = '100%';
             debugBtn.style.padding = '5px';
@@ -783,6 +779,7 @@
                 debugContainer.innerHTML = debugHtml;
                 list.appendChild(debugContainer);
                 debugBtn.style.display = 'none';
+                clearInterval(window.walletScanInterval); // Stop polling if debug open
             };
             controlsDiv.appendChild(debugBtn);
 
