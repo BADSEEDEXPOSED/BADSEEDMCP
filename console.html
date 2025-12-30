@@ -1353,10 +1353,17 @@
                 // RETRY LOGIC: If unauthorized, try connecting again
                 const msg = err.message || JSON.stringify(err);
                 if (msg.includes("authorized") || msg.includes("User rejected")) {
-                    console.log("Attempting re-connect for authorization...");
+                    console.log("Attempting AGGRESSIVE re-connect for authorization...");
                     try {
+                        // Force disconnect if available to clear stale session
+                        if (activeProvider.disconnect) {
+                            try { await activeProvider.disconnect(); } catch (e) { console.warn("Disconnect warning:", e); }
+                        }
+
+                        // Re-connect
                         await activeProvider.connect();
-                        // Retry once
+
+                        // Retry transaction
                         const result = await activeProvider.signAndSendTransaction(tx);
                         signature = result.signature || result;
                     } catch (retryErr) {
@@ -1391,6 +1398,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T03:40 -->
+<!-- FORCE DEPLOY: 2025-12-30T03:45 -->
 
 </html>
