@@ -311,10 +311,10 @@
             <div class="panel-header">
                 <h3>VOICE NODE (PROPHECY)</h3>
                 <div class="controls">
-                    <button class="btn btn-danger" onclick="toggleOverride()">OVERRIDE</button>
-                    <button class="btn btn-action" onclick="forceProphecy()">RE-ROLL AI</button>
+                    <button class="btn btn-action" onclick="forceProphecy()">🔮 FORCE (BLURRED)</button>
                     <button class="btn btn-action" style="background:#000; border-color:#fff; color:#fff;"
                         onclick="revealProphecy()">REVEAL</button>
+                    <button class="btn btn-danger" onclick="toggleOverride()">OVERRIDE</button>
                     <button onclick="fetchVoice(true)">REFRESH</button>
                 </div>
             </div>
@@ -438,7 +438,10 @@
                 <h3>NEURAL QUEUE (AI MEMORY)</h3>
                 <div class="controls" style="display:flex; align-items:center; gap:10px;">
                     <span id="queue-timer" style="font-size:10px; color:#aaa;">NEXT POST: --:--:--</span>
+                    <button onclick="forcePost()" style="color:#0ff; border-color:#0ff;">⚡ FORCE POST</button>
+                    <button onclick="addTestItem()">🧪 ADD TEST</button>
                     <button id="btn-pause" onclick="togglePauseQueue()" style="min-width:60px;">...</button>
+                    <button onclick="clearQueue()" class="btn-danger">🗑️ CLEAR</button>
                     <button onclick="fetchQueue()">REFRESH</button>
                 </div>
             </div>
@@ -494,16 +497,19 @@
 
         // --- UTILS ---
         function getBaseUrl(endpoint) { return `${BASE_URL}/${endpoint}`; }
+        // Robust Time Formatter
         function formatTime(iso) {
-            if (!iso) return "NEVER";
-            const date = new Date(iso);
-            const now = new Date();
-            const diff = Math.floor((now - date) / 1000);
-
-            if (diff < 60) return `${diff}s ago`;
-            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-            return date.toLocaleDateString();
+            if (!iso || iso === "undefined") return "--";
+            try {
+                const date = new Date(iso);
+                if (isNaN(date.getTime())) return "INVALID";
+                const now = new Date();
+                const diff = Math.floor((now - date) / 1000);
+                if (diff < 60) return `${diff}s ago`;
+                if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+                if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+                return date.toLocaleDateString();
+            } catch (e) { return "ERROR"; }
         }
 
         // --- FETCHERS ---
@@ -599,33 +605,30 @@
 
         async function fetchQueue() {
             try {
-                // Get Queue
-                const res = await fetch(getBaseUrl('queue-get'));
-                const data = await res.json();
+                // Get Queue & Pause Status (Parallel)
+                const [qRes, pRes] = await Promise.all([
+                    fetch(getBaseUrl('queue-get')),
+                    fetch(getBaseUrl('queue-toggle'))
+                ]);
 
-                // Get Pause Status
-                try {
-                    const pRes = await fetch(getBaseUrl('queue-toggle'));
-                    if (pRes.ok) {
-                        const pData = await pRes.json();
-                        const btn = document.getElementById('btn-pause');
-                        if (pData.paused) {
-                            btn.innerText = "RESUME";
-                            btn.className = "btn-action";
-                            btn.style.borderColor = "#0f0";
-                            btn.style.color = "#0f0";
-                            document.getElementById('queue-timer').innerText = "QUEUE PAUSED";
-                            document.getElementById('queue-timer').style.color = "#f90";
-                        } else {
-                            btn.innerText = "PAUSE";
-                            btn.className = "btn-danger";
-                            btn.style.borderColor = "#f00";
-                            btn.style.color = "#f00";
-                            updateNextPostTime();
-                        }
+                // Pause UI
+                if (pRes.ok) {
+                    const pData = await pRes.json();
+                    const btn = document.getElementById('btn-pause');
+                    if (pData.paused) {
+                        btn.innerText = "RESUME";
+                        btn.style.color = "#0f0"; btn.style.borderColor = "#0f0";
+                        document.getElementById('queue-timer').innerText = "QUEUE PAUSED";
+                        document.getElementById('queue-timer').style.color = "#f90";
+                    } else {
+                        btn.innerText = "PAUSE";
+                        btn.style.color = "#f00"; btn.style.borderColor = "#f00";
+                        updateNextPostTime();
                     }
-                } catch (e) { console.warn("Pause toggle fetch failed"); }
+                }
 
+                // Queue List UI
+                const data = await qRes.json();
                 const list = document.getElementById('queue-list');
 
                 if (!Array.isArray(data) || data.length === 0) {
@@ -634,8 +637,9 @@
                 }
 
                 let html = '';
-                data.forEach(item => {
-                    const narrative = item.aiLog ? item.aiLog : "Generating...";
+                // Reverse to show newest? No, usually oldest first but... user prefers fresh?
+                data.reverse().forEach(item => {
+                    const narrative = item.aiLog || "Generating...";
                     const memo = item.memo || "No Memo";
 
                     html += `
@@ -714,9 +718,10 @@
                 // Render List
                 let logHtml = '';
                 hist.slice(0, 5).forEach(h => {
+                    const txLink = `https://viewblock.io/arweave/tx/${h.txId}`;
                     logHtml += `<div class="list-item">
                         <span style="color:#666">${h.date}</span> 
-                        <a href="https://viewblock.io/arweave/tx/${h.txId}" target="_blank" style="color:#0ff; text-decoration:none;">${h.txId.substring(0, 12)}...</a>
+                        <a href="${txLink}" target="_blank" style="color:#0ff; text-decoration:none;">${h.txId.substring(0, 12)}...</a>
                         ${h.manual ? '<span style="color:#f90">[MANUAL]</span>' : ''}
                      </div>`;
                 });
@@ -735,15 +740,22 @@
                 let html = '';
                 if (data.recentParams && data.recentParams.length > 0) {
                     data.recentParams.forEach(tx => {
-                        html += `<div class="list-item">
-                            <span style="color:#0f0">${tx.signature.substring(0, 8)}...</span>
-                            <span style="color:#fff">"${tx.memo || ''}"</span>
+                        const sig = tx.signature || "unknown";
+                        const link = `https://solscan.io/tx/${sig}`;
+                        // We don't have blockTime in recentParams yet, sticking to basic display or if available
+                        const time = tx.blockTime ? formatTime(new Date(tx.blockTime * 1000).toISOString()) : "";
+
+                        html += `<div class="list-item" style="display:flex; justify-content:space-between;">
+                            <div>
+                                <a href="${link}" target="_blank" style="color:#0f0; text-decoration:none; margin-right:5px;">${sig.substring(0, 8)}...</a>
+                                <span style="color:#fff">"${tx.memo || ''}"</span>
+                            </div>
+                            <span style="color:#666; font-size:9px;">${time}</span>
                         </div>`;
                     });
                 } else {
                     html = '<div class="list-item">No recent activity</div>';
                 }
-
                 document.getElementById('wallet-txs').innerHTML = html;
             } catch (e) { }
         }
@@ -773,7 +785,7 @@
         };
 
         window.forceProphecy = async () => {
-            if (!confirm("Re-roll Prophecy with current stats?")) return;
+            if (!confirm("🔮 RE-ROLL AI PROPHECY? (Uses current stats)")) return;
             await fetch(getBaseUrl('manual-trigger-prophecy'));
             alert("Ordering AI generation...");
             setTimeout(fetchSentiment, 3000);
@@ -782,15 +794,41 @@
         window.revealProphecy = async () => {
             if (!confirm("Post Prophecy to X.com NOW?")) return;
             await fetch(getBaseUrl('prophecy-reveal'));
-            alert("Prophecy Revealed to the world.");
+            alert("Prophecy Revealed.");
             setTimeout(fetchSentiment, 2000);
         };
 
         window.forceArchive = async () => {
-            if (!confirm("Force Arweave snapshot? Costs SOL.")) return;
+            if (!confirm("📜 FORCE ARWEAVE SNAPSHOT?")) return;
             await fetch(getBaseUrl('manual-trigger-archive'));
             alert("Archive process started...");
             setTimeout(fetchArchive, 5000);
+        };
+
+        // --- CONTROLS IMPLEMENTATION ---
+
+        window.forcePost = async () => {
+            if (!confirm("⚡ FORCE POST QUEUE TO X.COM NOW?")) return;
+            try {
+                await fetch(getBaseUrl('queue-force'), { method: 'POST' });
+                alert("Processor Triggered.");
+                fetchQueue();
+            } catch (e) { alert("Error: " + e.message); }
+        };
+
+        window.addTestItem = async () => {
+            try {
+                await fetch(getBaseUrl('queue-add-test'), { method: 'POST' });
+                fetchQueue();
+            } catch (e) { alert("Error: " + e.message); }
+        };
+
+        window.clearQueue = async () => {
+            if (!confirm("🗑️ DELETE ALL PENDING ITEMS? CANNOT UNDO.")) return;
+            try {
+                await fetch(getBaseUrl('queue-clear'), { method: 'POST' });
+                fetchQueue();
+            } catch (e) { alert("Error: " + e.message); }
         };
 
 
