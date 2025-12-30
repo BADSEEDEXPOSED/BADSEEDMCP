@@ -1340,12 +1340,31 @@
 
             // HANDLE SIGNING (Legacy vs Standard)
             let signature;
-            if (activeProvider.signAndSendTransaction) {
-                // Legacy (Phantom, Solflare, Jupiter)
-                const result = await activeProvider.signAndSendTransaction(tx);
-                signature = result.signature || result; // Some return string, some object
-            } else {
-                throw new Error("Wallet does not support direct signAndSend (Standard Adapter pending)");
+            try {
+                if (activeProvider.signAndSendTransaction) {
+                    // Legacy (Phantom, Solflare, Jupiter)
+                    const result = await activeProvider.signAndSendTransaction(tx);
+                    signature = result.signature || result;
+                } else {
+                    throw new Error("Wallet does not support direct signAndSend (Standard Adapter pending)");
+                }
+            } catch (err) {
+                console.warn("Tx Send Failed REASON:", err);
+                // RETRY LOGIC: If unauthorized, try connecting again
+                const msg = err.message || JSON.stringify(err);
+                if (msg.includes("authorized") || msg.includes("User rejected")) {
+                    console.log("Attempting re-connect for authorization...");
+                    try {
+                        await activeProvider.connect();
+                        // Retry once
+                        const result = await activeProvider.signAndSendTransaction(tx);
+                        signature = result.signature || result;
+                    } catch (retryErr) {
+                        throw new Error("Retry failed: " + (retryErr.message || "Unknown"));
+                    }
+                } else {
+                    throw err;
+                }
             }
 
             console.log("Tx Sent:", signature);
@@ -1372,6 +1391,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T03:10 -->
+<!-- FORCE DEPLOY: 2025-12-30T03:40 -->
 
 </html>
