@@ -1352,9 +1352,9 @@
                 document.getElementById('action-ui').style.display = 'none';
             } catch (e) {
                 console.error("Execute Message Failed:", e);
-                // Silent failure for User Rejection
+                // Silent failure for User Rejection or Authorization/Trust issues
                 const msg = e.message || "";
-                if (!msg.includes("rejected") && !msg.includes("Refreshed")) {
+                if (!msg.includes("rejected") && !msg.includes("Refreshed") && !msg.includes("authorized")) {
                     alert("Send Failed: " + msg);
                 }
             }
@@ -1550,6 +1550,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T17:00 -->
+<!-- FORCE DEPLOY: 2025-12-30T17:15 -->
 
 </html>
