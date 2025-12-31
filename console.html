@@ -1559,27 +1559,35 @@
                 console.warn("Tx Failed (First Attempt):", err);
                 const msg = err.message || JSON.stringify(err);
 
-                // AUTO-HEAL: If Unauthorized, Force Reconnect and Retry ONCE
+                // AUTO-HEAL: Aggressive Reset for Persistent Unauthorized Error
                 if (msg.includes("authorized") || msg.includes("0x0")) {
-                    console.log("Wrapper: Unauthorized Error detected. Attempting Auto-Heal (Reconnect)...");
+                    console.log("Wrapper: Unauthorized. Initiating Hard Session Reset...");
 
-                    // 1. Disconnect (Force clear session)
+                    // 1. Force Disconnect
                     if (provider.disconnect) await provider.disconnect().catch(e => { });
 
-                    // 2. Connect (Trigger Popup)
-                    await provider.connect();
+                    // 2. NUCLEAR OPTION: Clear local references and sleep
+                    // This forces the next line to grab a fresh instance from window.solana
+                    await new Promise(r => setTimeout(r, 500));
 
-                    // 3. Retry Strategy 1
-                    if (provider.signAndSendTransaction) {
-                        console.log("Wrapper: Retrying signAndSend...");
-                        transaction.feePayer = provider.publicKey; // Update feePayer
-                        const result = await provider.signAndSendTransaction(transaction);
+                    // 3. Re-Acquire Provider from Global Scope (in case extension refreshed it)
+                    const freshProvider = window.solana || provider;
+
+                    // 4. Force Connect
+                    await freshProvider.connect();
+
+                    // 5. Retry with Fresh Provider
+                    console.log("Wrapper: Retrying with Fresh Session...");
+                    transaction.feePayer = freshProvider.publicKey;
+
+                    if (freshProvider.signAndSendTransaction) {
+                        const result = await freshProvider.signAndSendTransaction(transaction);
                         signature = result.signature || result;
                     } else {
-                        throw err; // Cannot retry
+                        throw err;
                     }
                 } else {
-                    throw err; // Other error (e.g. User Rejected)
+                    throw err;
                 }
             }
             return signature;
@@ -1587,6 +1595,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T18:10 -->
+<!-- FORCE DEPLOY: 2025-12-30T20:10 -->
 
 </html>
