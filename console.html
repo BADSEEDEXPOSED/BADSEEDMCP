@@ -1527,29 +1527,41 @@
                 try { await activeProvider.disconnect(); await activeProvider.connect(); } catch (e) { }
             }
 
-            transaction.feePayer = activeProvider.publicKey;
+            async function sendTransactionWrapper(transaction, connection) {
+                if (!activeProvider) throw new Error("Wallet not connected");
 
-            let signature;
-            // STRATEGY 1: SignTransaction (Preferred)
-            if (activeProvider.signTransaction) {
-                console.log("Wrapper: signTransaction strategy");
-                const signedTx = await activeProvider.signTransaction(transaction);
-                const rawTx = signedTx.serialize();
-                signature = await connection.sendRawTransaction(rawTx, { skipPreflight: false });
+                // Check Mismatch
+                const providerKey = activeProvider.publicKey.toString();
+                if (activeProvider.publicKey && providerKey !== userWallet) {
+                    console.warn(`Mismatch! Prov:${providerKey} User:${userWallet}`);
+                    try { await activeProvider.disconnect(); await activeProvider.connect(); } catch (e) { }
+                }
+
+                transaction.feePayer = activeProvider.publicKey;
+
+                let signature;
+
+                // STRATEGY 1: SignAndSend (Standard Adapter) - MATCHES REFERENCE APP
+                if (activeProvider.signAndSendTransaction) {
+                    console.log("Wrapper: signAndSend strategy (Primary)");
+                    const result = await activeProvider.signAndSendTransaction(transaction);
+                    signature = result.signature || result;
+                }
+                // STRATEGY 2: SignTransaction (Offline/Manual Fallback)
+                else if (activeProvider.signTransaction) {
+                    console.log("Wrapper: signTransaction strategy (Fallback)");
+                    const signedTx = await activeProvider.signTransaction(transaction);
+                    const rawTx = signedTx.serialize();
+                    signature = await connection.sendRawTransaction(rawTx, { skipPreflight: false });
+                }
+                else {
+                    throw new Error("No signing method found");
+                }
+                return signature;
             }
-            // STRATEGY 2: SignAndSend (Fallback)
-            else if (activeProvider.signAndSendTransaction) {
-                console.log("Wrapper: signAndSend strategy");
-                const result = await activeProvider.signAndSendTransaction(transaction);
-                signature = result.signature || result;
-            } else {
-                throw new Error("No signing method found");
-            }
-            return signature;
-        }
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T17:15 -->
+<!-- FORCE DEPLOY: 2025-12-30T17:30 -->
 
 </html>
