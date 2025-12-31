@@ -1518,42 +1518,47 @@
         };
 
         async function sendTransactionWrapper(transaction, connection) {
-            // DIRECT PHANTOM BYPASS - ignoring activeProvider abstraction
+            // DIRECT PHANTOM BYPASS
             const provider = window.solana;
             if (!provider || !provider.isPhantom) {
-                console.warn("Phantom not found, falling back to activeProvider");
                 if (!activeProvider) throw new Error("No Wallet Provider Found");
                 return activeProvider.signAndSendTransaction(transaction);
             }
 
-            console.log("Wrapper: Direct Phantom Mode. Forcing Fresh Auth...");
+            console.log("Wrapper: Direct Phantom Mode.");
 
             // 1. Force Disconnect (Clean Slate)
+            // We MUST disconnect to clear the "Unauthorized" state from the extension
             try { await provider.disconnect(); } catch (e) { }
 
             // 2. Connect & Capture Key
             const resp = await provider.connect();
             const freshKey = resp.publicKey;
-            console.log("Wrapper: Freshly Connected Key:", freshKey.toString());
 
-            // 3. Force Transaction to match Fresh Key
-            transaction.feePayer = freshKey;
+            // 3. Force Transaction to match Fresh Key (Safe Type Conversion)
+            // Converting to string and back to local PublicKey class ensures Type Safety
+            transaction.feePayer = new solanaWeb3.PublicKey(freshKey.toString());
 
             // 4. Update Blockhash (Safety)
             const { blockhash } = await connection.getLatestBlockhash();
             transaction.recentBlockhash = blockhash;
 
-            console.log("Wrapper: Sending with Fresh Auth...");
+            console.log("Wrapper: Sending...", transaction.feePayer.toString());
 
             // 5. Sign And Send
-            const result = await provider.signAndSendTransaction(transaction);
-            const signature = result.signature || result;
-
-            return signature;
+            try {
+                const result = await provider.signAndSendTransaction(transaction);
+                const signature = result.signature || result;
+                return signature;
+            } catch (e) {
+                console.error("SignAndSend Error:", e);
+                alert("Wallet Error: " + e.message);
+                throw e;
+            }
         }
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T21:20 -->
+<!-- FORCE DEPLOY: 2025-12-30T21:30 -->
 
 </html>
