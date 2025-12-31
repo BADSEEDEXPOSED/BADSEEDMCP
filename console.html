@@ -1518,49 +1518,42 @@
         };
 
         async function sendTransactionWrapper(transaction, connection) {
-                else {
-                throw new Error("No signing method found");
+            // DIRECT PHANTOM BYPASS - ignoring activeProvider abstraction
+            const provider = window.solana;
+            if (!provider || !provider.isPhantom) {
+                console.warn("Phantom not found, falling back to activeProvider");
+                if (!activeProvider) throw new Error("No Wallet Provider Found");
+                return activeProvider.signAndSendTransaction(transaction);
             }
-        } catch (err) {
-            console.warn("Tx Failed (First Attempt):", err);
-            const msg = err.message || JSON.stringify(err);
 
-            // AUTO-HEAL: Aggressive Reset for Persistent Unauthorized Error
-            if (msg.includes("authorized") || msg.includes("0x0")) {
-                console.log("Wrapper: Unauthorized. Initiating Hard Session Reset...");
+            console.log("Wrapper: Direct Phantom Mode. Forcing Fresh Auth...");
 
-                // 1. Force Disconnect
-                if (provider.disconnect) await provider.disconnect().catch(e => { });
+            // 1. Force Disconnect (Clean Slate)
+            try { await provider.disconnect(); } catch (e) { }
 
-                // 2. NUCLEAR OPTION: Clear local references and sleep
-                // This forces the next line to grab a fresh instance from window.solana
-                await new Promise(r => setTimeout(r, 500));
+            // 2. Connect & Capture Key
+            const resp = await provider.connect();
+            const freshKey = resp.publicKey;
+            console.log("Wrapper: Freshly Connected Key:", freshKey.toString());
 
-                // 3. Re-Acquire Provider from Global Scope (in case extension refreshed it)
-                const freshProvider = window.solana || provider;
+            // 3. Force Transaction to match Fresh Key
+            transaction.feePayer = freshKey;
 
-                // 4. Force Connect
-                await freshProvider.connect();
+            // 4. Update Blockhash (Safety)
+            const { blockhash } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
 
-                // 5. Retry with Fresh Provider
-                console.log("Wrapper: Retrying with Fresh Session...");
-                transaction.feePayer = freshProvider.publicKey;
+            console.log("Wrapper: Sending with Fresh Auth...");
 
-                if (freshProvider.signAndSendTransaction) {
-                    const result = await freshProvider.signAndSendTransaction(transaction);
-                    signature = result.signature || result;
-                } else {
-                    throw err;
-                }
-            } else {
-                throw err;
-            }
-        }
-        return signature;
+            // 5. Sign And Send
+            const result = await provider.signAndSendTransaction(transaction);
+            const signature = result.signature || result;
+
+            return signature;
         }
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T21:00 -->
+<!-- FORCE DEPLOY: 2025-12-30T21:10 -->
 
 </html>
