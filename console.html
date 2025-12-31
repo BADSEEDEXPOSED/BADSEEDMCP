@@ -1323,7 +1323,7 @@
                 if (swapRes.cleanupInstruction) tx.add(deserializeInstruction(swapRes.cleanupInstruction));
 
                 // 4. Send
-                const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=273e36fb-f6f8-4556-8166-a2299b594197");
+                const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
                 const { blockhash } = await connection.getLatestBlockhash();
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = new solanaWeb3.PublicKey(userWallet);
@@ -1372,7 +1372,7 @@
             if (!userWallet) throw new Error("Wallet not connected");
 
             const { Connection, Transaction, SystemProgram, PublicKey, TransactionInstruction, LAMPORTS_PER_SOL } = solanaWeb3;
-            const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=273e36fb-f6f8-4556-8166-a2299b594197");
+            const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
 
             const destPubkey = new PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
             const walletPubkey = new PublicKey(userWallet); // activeProvider.publicKey
@@ -1587,6 +1587,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T18:00 -->
+<!-- FORCE DEPLOY: 2025-12-30T18:10 -->
 
 </html>
