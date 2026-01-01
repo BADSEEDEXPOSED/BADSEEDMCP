@@ -43,6 +43,27 @@
             overflow: hidden;
         }
 
+        /* --- SCROLLBARS --- */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #001100;
+            border-left: 1px solid #003300;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #004400;
+            border: 1px solid #0f0;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #0f0;
+            box-shadow: 0 0 10px #0f0;
+        }
+
         /* --- LAYOUT --- */
         .header {
             display: flex;
@@ -1585,6 +1606,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T23:25 -->
+<!-- FORCE DEPLOY: 2025-12-30T23:35 -->
 
 </html>
