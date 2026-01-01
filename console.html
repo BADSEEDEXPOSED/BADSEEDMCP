@@ -7,6 +7,11 @@
     <title>BADSEED // GOD MODE CONSOLE</title>
     <script src="https://unpkg.com/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    <script src="https://unpkg.com/buffer@6.0.3/index.js"></script>
+    <script>
+        // Polyfill Buffer Global
+        window.Buffer = window.Buffer || window.buffer.Buffer; 
+    </script>
     <script>
         // --- WALLET STANDARD SUPPORT (EARLY BINDING) ---
         // Moved to HEAD to catch events that fire before BODY loads
@@ -1516,23 +1521,7 @@
         window.addEventListener('load', () => setTimeout(refreshWalletList, 1000)); // Backup
 
         // --- SHARED TRANSACTION SENDER (Ported from App.js logic + Retry) ---
-
-        // Polyfill Buffer for browser (needed for transaction deserialization)
-        window.Buffer = window.Buffer || {
-            from: (data, encoding) => {
-                if (encoding === 'base64') {
-                    const bin = atob(data);
-                    const buf = new Uint8Array(bin.length);
-                    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-                    return buf;
-                }
-                if (encoding === 'utf-8' || encoding === 'utf8') {
-                    return new TextEncoder().encode(data);
-                }
-                if (Array.isArray(data)) return new Uint8Array(data);
-                return data; // assume uint8array
-            }
-        };
+        // Buffer is polyfilled in HEAD via CDN
 
         async function sendTransactionWrapper(transaction, connection) {
             // DIRECT PHANTOM BYPASS
@@ -1576,6 +1565,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T22:30 -->
+<!-- FORCE DEPLOY: 2025-12-30T22:45 -->
 
 </html>
