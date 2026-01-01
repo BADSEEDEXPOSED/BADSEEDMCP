@@ -345,6 +345,9 @@
             <div class="heartbeat" id="heartbeat-display">
                 <div class="status-dot" id="hb-dot"></div>
                 <span id="hb-text">INITIALIZING...</span>
+                <button id="hb-wake"
+                    style="display:none; background:none; border:none; color:#f00; cursor:pointer; font-size:12px; padding:0 5px;"
+                    onclick="wakePoller()" title="Force Pulse">⚡</button>
             </div>
         </div>
     </div>
@@ -937,6 +940,7 @@
 
                 const dot = document.getElementById('hb-dot');
                 const text = document.getElementById('hb-text');
+                const wakeBtn = document.getElementById('hb-wake');
 
                 if (data.status === 'online') {
                     dot.style.background = '#0f0';
@@ -944,12 +948,20 @@
                     dot.classList.add('online');
                     text.innerText = `ONLINE (PULSE: ${formatTime(data.lastPulse)})`;
                     text.style.color = '#0f0';
+                    if (wakeBtn) wakeBtn.style.display = 'none';
                 } else {
                     dot.style.background = '#f00';
                     dot.style.boxShadow = '0 0 10px #f00';
                     dot.classList.remove('online');
                     text.innerText = `STALLED (${formatTime(data.lastPulse)})`;
                     text.style.color = '#f00';
+                    if (wakeBtn) wakeBtn.style.display = 'inline-block';
+
+                    // AUTO-WAKE (SELF-HEALING)
+                    // Trigger if stalled, but verify it hasn't been triggered too recently to avoid loops
+                    // For now, simple trigger is fine as poll rate is 10s
+                    console.warn("BADSEED: System Stalled. Initiating Auto-Wake Protocol...");
+                    wakePoller(true);
                 }
             } catch (e) {
                 document.getElementById('hb-text').innerText = "DISCONNECTED";
@@ -1604,6 +1616,33 @@
             }
         }
 
+        }
+
+        async function wakePoller(auto = false) {
+            if (!auto) {
+                if (!confirm("⚡ FORCE WAKE UP CLOUD POLLER? \n(This runs the heavy background job manually)")) return;
+            } else {
+                console.log("BADSEED: Auto-Waking Cloud Poller...");
+            }
+
+            const btn = document.getElementById('hb-wake');
+            if (btn) btn.innerHTML = "⌛";
+
+            try {
+                await fetch(getBaseUrl('cloud-queue-poller'));
+                if (!auto) {
+                    alert("Poller executed. System should recover.");
+                    fetchHeartbeat();
+                } else {
+                    console.log("BADSEED: Auto-Wake Successful. Pulse restored.");
+                }
+            } catch (e) {
+                console.error("Wake Failed:", e);
+                if (!auto) alert("Wake Failed: " + e.message);
+            } finally {
+                if (btn) btn.innerHTML = "⚡";
+            }
+        }
     </script>
 </body>
 <!-- FORCE DEPLOY: 2025-12-30T23:35 -->
