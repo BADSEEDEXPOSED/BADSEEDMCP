@@ -1368,66 +1368,85 @@
         // MOVED sendSol to avoid duplication/confusion (it's below)
 
         async function sendSol(amount, memo) {
-            // 1. Get Fresh Identity (Dynamic)
+            console.log("Starting Split-Strategy Send...");
+
+            // 1. Get Provider
             const provider = window.solana || activeProvider;
             if (!provider) throw new Error("No Wallet Found");
 
-            // Verify Identity
+            // 2. Connect & Verify Identity
             const resp = await provider.connect();
-            const freshKeyStr = resp.publicKey.toString();
-            const walletPubkey = new solanaWeb3.PublicKey(freshKeyStr);
-            console.log("Identity Verified:", freshKeyStr);
+            const walletPubkey = new solanaWeb3.PublicKey(resp.publicKey.toString());
+            console.log("Identity Verified:", walletPubkey.toString());
 
-            const { Connection, Transaction, SystemProgram, PublicKey, TransactionInstruction, LAMPORTS_PER_SOL } = solanaWeb3;
-            const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
+            // 3. Setup Connection
+            const connection = new solanaWeb3.Connection(
+                "https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c",
+                "confirmed"
+            );
 
-            // --- CHECK BALANCE ---
-            const balance = await connection.getBalance(walletPubkey);
-            console.log("Wallet Balance:", balance / LAMPORTS_PER_SOL, "SOL");
-            const required = Math.floor(amount * LAMPORTS_PER_SOL);
-            if (balance < required) {
-                alert(`Insufficient Funds! Make sure you have enough SOL.\nBalance: ${balance / LAMPORTS_PER_SOL}\nNeed: ${amount}`);
-                throw new Error("Insufficient Funds");
-            }
+            // 4. Build Transaction
+            const tx = new solanaWeb3.Transaction();
+            const destPubkey = new solanaWeb3.PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
 
-            const destPubkey = new PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
-            const tx = new Transaction();
-
-            // 2. Build Instruction
-            tx.add(SystemProgram.transfer({
+            // Transfer Instruction
+            tx.add(solanaWeb3.SystemProgram.transfer({
                 fromPubkey: walletPubkey,
                 toPubkey: destPubkey,
-                lamports: required
+                lamports: Math.floor(amount * solanaWeb3.LAMPORTS_PER_SOL)
             }));
 
-            // 3. Memo
+            // Memo Instruction (Optional - re-add if core transfer works)
             if (memo) {
-                const MEMO_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-                tx.add(new TransactionInstruction({
+                const MEMO_ID = new solanaWeb3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+                tx.add(new solanaWeb3.TransactionInstruction({
                     keys: [],
                     programId: MEMO_ID,
                     data: (new TextEncoder()).encode(memo)
                 }));
             }
 
-            // 4. Finalize
-            const { blockhash } = await connection.getLatestBlockhash();
+            // 5. Finalize Details
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
             tx.recentBlockhash = blockhash;
+            tx.lastValidBlockHeight = lastValidBlockHeight;
             tx.feePayer = walletPubkey;
 
-            console.log("Sending...", walletPubkey.toString());
+            console.log("Requesting Signature...");
 
-            // 5. Send with SKIP PREFLIGHT
+            // --- STEP A: SIGN (Auth Only) ---
             try {
-                // Try passing options in second argument (Phantom standard)
-                const result = await provider.signAndSendTransaction(tx, { skipPreflight: true });
-                const signature = result.signature || result;
+                // This POPUP asks user to Approve. 
+                // If this fails, it's PURELY an Auth/Permission issue.
+                const signedTx = await provider.signTransaction(tx);
+                console.log("Transaction Signed Successfully!");
 
-                console.log("Tx Sent (Preflight Skipped):", signature);
+                // --- STEP B: BROADCAST (Network Only) ---
+                console.log("Broadcasting...");
+
+                // Serialize
+                const rawTx = signedTx.serialize();
+
+                // Send Raw
+                const signature = await connection.sendRawTransaction(rawTx, {
+                    skipPreflight: true, // Force send
+                    maxRetries: 3
+                });
+
+                console.log("Broadcasted:", signature);
+
                 return signature;
+
             } catch (e) {
-                console.error("Tx Failed:", e);
-                alert("Tx Failed: " + (e.message || "Unknown Error"));
+                console.error("Split-Strategy Error:", e);
+                // Distinguish Phase
+                if (e.message.includes("User rejected")) {
+                    alert("User Cancelled Signature");
+                } else if (e.message.includes("authorized")) {
+                    alert("Wallet Refused to Sign (Auth Error)");
+                } else {
+                    alert("Send Error: " + e.message);
+                }
                 throw e;
             }
         }
@@ -1565,6 +1584,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T22:45 -->
+<!-- FORCE DEPLOY: 2025-12-30T22:50 -->
 
 </html>
