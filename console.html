@@ -7,10 +7,12 @@
     <title>BADSEED // GOD MODE CONSOLE</title>
     <script src="https://unpkg.com/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
-    <script src="https://unpkg.com/buffer@6.0.3/index.js"></script>
+    <!-- Use Bundle.run to get a Browserified version of Buffer -->
+    <script src="https://bundle.run/buffer@6.0.3"></script>
     <script>
-        // Polyfill Buffer Global
-        window.Buffer = window.Buffer || window.buffer.Buffer; 
+        // Polyfill Buffer Global (Bundle.run exposes 'buffer' on window)
+        window.Buffer = window.Buffer || window.buffer.Buffer;
+        console.log("Buffer Loaded:", typeof window.Buffer);
     </script>
     <script>
         // --- WALLET STANDARD SUPPORT (EARLY BINDING) ---
@@ -1416,6 +1418,18 @@
 
             console.log("Requesting Signature & Send...");
 
+            // DEBUG: Local Serialization Check
+            // If the transaction fails here, it is a code/buffer issue, NOT a wallet issue.
+            try {
+                const msg = tx.compileMessage();
+                const serialized = msg.serialize();
+                console.log("DEBUG: Serialization Successful. Bytes:", serialized.length);
+            } catch (serErr) {
+                console.error("DEBUG: Serialization FAILED locally:", serErr);
+                alert("Code Error: Transaction Serialization Failed.\n" + serErr.message);
+                throw serErr;
+            }
+
             try {
                 // ATOMIC SEND (Standard Phantom API)
                 const result = await provider.signAndSendTransaction(tx, { skipPreflight: true });
@@ -1571,6 +1585,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T23:15 -->
+<!-- FORCE DEPLOY: 2025-12-30T23:25 -->
 
 </html>
