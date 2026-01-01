@@ -1367,27 +1367,32 @@
             const provider = window.solana || activeProvider;
             if (!provider) throw new Error("No Wallet Found");
 
-            // Verify Identity: Force connect to get the *current* public key
-            // This ensures we build the transaction for the account that will actually sign it
+            // Verify Identity
             const resp = await provider.connect();
             const freshKeyStr = resp.publicKey.toString();
-            // Instantiate with PAGE'S Web3 library to avoid Type Mismatch
             const walletPubkey = new solanaWeb3.PublicKey(freshKeyStr);
-
-            console.log("Authorized Sender Identity:", freshKeyStr);
+            console.log("Identity Verified:", freshKeyStr);
 
             const { Connection, Transaction, SystemProgram, PublicKey, TransactionInstruction, LAMPORTS_PER_SOL } = solanaWeb3;
-            // Use confirmed working RPC
             const connection = new Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
+
+            // --- CHECK BALANCE ---
+            const balance = await connection.getBalance(walletPubkey);
+            console.log("Wallet Balance:", balance / LAMPORTS_PER_SOL, "SOL");
+            const required = Math.floor(amount * LAMPORTS_PER_SOL);
+            if (balance < required) {
+                alert(`Insufficient Funds! Make sure you have enough SOL.\nBalance: ${balance / LAMPORTS_PER_SOL}\nNeed: ${amount}`);
+                throw new Error("Insufficient Funds");
+            }
 
             const destPubkey = new PublicKey("9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr");
             const tx = new Transaction();
 
-            // 2. Build Instruction (Using Verified Identity)
+            // 2. Build Instruction
             tx.add(SystemProgram.transfer({
-                fromPubkey: walletPubkey, // Matches connected wallet
+                fromPubkey: walletPubkey,
                 toPubkey: destPubkey,
-                lamports: Math.floor(amount * LAMPORTS_PER_SOL)
+                lamports: required
             }));
 
             // 3. Memo
@@ -1400,25 +1405,24 @@
                 }));
             }
 
-            // 4. Finalize Transaction
+            // 4. Finalize
             const { blockhash } = await connection.getLatestBlockhash();
             tx.recentBlockhash = blockhash;
             tx.feePayer = walletPubkey;
 
-            console.log("Sending Transaction as:", walletPubkey.toString());
+            console.log("Sending...", walletPubkey.toString());
 
-            // 5. Send (Directly via Provider)
+            // 5. Send with SKIP PREFLIGHT
             try {
-                const result = await provider.signAndSendTransaction(tx);
+                // Try passing options in second argument (Phantom standard)
+                const result = await provider.signAndSendTransaction(tx, { skipPreflight: true });
                 const signature = result.signature || result;
 
-                console.log("Tx Sent:", signature);
-                // Optional: Wait for confirmation (user experience)
-                // await connection.confirmTransaction(signature); 
+                console.log("Tx Sent (Preflight Skipped):", signature);
                 return signature;
             } catch (e) {
                 console.error("Tx Failed:", e);
-                // Re-throw to let UI handle alerts
+                alert("Tx Failed: " + (e.message || "Unknown Error"));
                 throw e;
             }
         }
@@ -1572,6 +1576,6 @@
 
     </script>
 </body>
-<!-- FORCE DEPLOY: 2025-12-30T22:15 -->
+<!-- FORCE DEPLOY: 2025-12-30T22:30 -->
 
 </html>
