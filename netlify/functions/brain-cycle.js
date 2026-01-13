@@ -29,5 +29,4 @@ const myHandler = async (event) => {
 };
 
 // Schedule: Run every 10 minutes
-// export const handler = schedule("*/10 * * * *", fn);
 export const handler = schedule("*/10 * * * *", myHandler);

