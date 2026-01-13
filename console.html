@@ -1303,13 +1303,15 @@
         async function fetchOrchestration() {
             try {
                 const res = await fetch(getBaseUrl('dapp-config'));
+                if (!res.ok) throw new Error(`Status ${res.status}`);
                 const data = await res.json();
 
                 const persona = data.activePersona || "AUTO (ANCIENT SEED)";
                 const meta = data.systemMetadata || {};
 
                 document.getElementById('brain-persona').innerText = persona;
-                document.getElementById('brain-price').innerText = (meta.price_sol || "0") + " SOL";
+                const price = parseFloat(meta.price_sol || 0);
+                document.getElementById('brain-price').innerText = price.toFixed(9) + " SOL";
                 document.getElementById('brain-mcap').innerText = (meta.market_cap_sol || "0") + " SOL";
 
                 // Update persona color
