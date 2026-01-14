@@ -1328,6 +1328,7 @@
         async function fetchWallet() {
             try {
                 const res = await fetch(getBaseUrl('wallet-status'));
+                if (!res.ok) throw new Error(`Status ${res.status}`);
                 const data = await res.json();
                 document.getElementById('wallet-balance').innerText = data.balance.toFixed(4) + " SOL";
                 document.getElementById('wallet-time').innerText = new Date().toLocaleTimeString();
