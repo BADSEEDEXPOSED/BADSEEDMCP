@@ -1,7 +1,70 @@
 import 'dotenv/config';
+import fs from 'fs/promises';
+import path from 'path';
+
+const BACKUP_PATH = path.join(process.cwd(), 'memory', 'backup_seed.json');
 
 const VOICE_NODE_URL = "https://badseed.netlify.app/.netlify/functions";
-const VALUE_NODE_URL = "https://badseed-token.netlify.app/.netlify/functions";
+const VALUE_NODE_URL = "https://badseedtoken.netlify.app/.netlify/functions";
+
+/**
+ * GARDEN CARE: Check the health of all roots and perform a "Pulse Poke" if withered.
+ */
+async function checkRootVitality() {
+    console.log("🌱 Garden Care: Inspecting Root Vitality...");
+    const nodes = [
+        { name: "ROOT (VOICE)", url: `${VOICE_NODE_URL}/heartbeat-get`, awakeUrl: `${VOICE_NODE_URL}/cloud-queue-poller` },
+        { name: "STALK (VALUE)", url: `${VALUE_NODE_URL}/summary`, awakeUrl: `${VALUE_NODE_URL}/summary` }
+    ];
+
+    for (const node of nodes) {
+        try {
+            const start = Date.now();
+            const res = await fetch(node.url, { method: 'HEAD' });
+            const latency = Date.now() - start;
+            if (res.ok) {
+                console.log(`   ✅ ${node.name}: Online (${latency}ms)`);
+            } else {
+                console.warn(`   ⚠️ ${node.name}: Tensed (${res.status}). Initiating Pulse Poke...`);
+                await fetch(node.awakeUrl); // The Awakening
+            }
+        } catch (e) {
+            console.error(`   ❌ ${node.name}: Nerve Block Detected! (${e.message}). Sending Emergency Pulse...`);
+            try { await fetch(node.awakeUrl); } catch (err) { /* silent fail */ }
+        }
+    }
+}
+
+/**
+ * GENETIC MEMORY: Restore the cloud from local DNA if it has amnesia.
+ */
+async function healAmnesia() {
+    console.log("🧬 Genetic Memory: Checking for Cloud Amnesia...");
+    try {
+        const res = await fetch(`${VOICE_NODE_URL}/config-get`);
+        const data = await res.json();
+        const rules = data.rules || [];
+
+        if (rules.length === 0) {
+            console.warn("   ⚠️ Amnesia Detected: Voice Node has no rules. Re-planting from Local Seed...");
+            const localSeed = await fs.readFile(BACKUP_PATH, 'utf-8');
+            const seedData = JSON.parse(localSeed);
+
+            await fetch(`${VOICE_NODE_URL}/config-set`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rules: seedData.rules })
+            });
+            console.log("   ✅ Restoration Complete: Roots are remembered.");
+        } else {
+            // Update local backup with the latest cloud state
+            console.log("   🌱 Cloud is healthy. Updating Local Backup Seed...");
+            await fs.writeFile(BACKUP_PATH, JSON.stringify({ rules, timestamp: new Date().toISOString() }, null, 2));
+        }
+    } catch (e) {
+        console.error("   ❌ Genetic Sync Failed:", e.message);
+    }
+}
 
 console.log("---------------------------------------------------");
 console.log("🌱 BADSEED GOD NODE (BRAIN) STARTING UP...");
@@ -15,6 +78,10 @@ if (!process.env.OPENAI_API_KEY) {
 
 async function orchestrate() {
     console.log(`[${new Date().toISOString()}] 🧠 Brain is processing...`);
+
+    // Step 0: Garden Care & Genetic Healing
+    await checkRootVitality();
+    await healAmnesia();
 
     try {
         // 1. Fetch Value Node Data
