@@ -16,4 +16,7 @@ jobs:
         run: curl -s "https://badseedtoken.netlify.app/.netlify/functions/summary" > /dev/null
 
       - name: Pulse Bloom (Agent)
-        run: curl -s -X POST "https://badseed-agent.netlify.app/.netlify/functions/grok-chat" -H "Content-Type: application/json" -d '{"ping":true}' > /dev/null
+        run: |
+          curl -s -X POST "https://badseed-agent.netlify.app/.netlify/functions/grok-chat" \
+            -H "Content-Type: application/json" \
+            -d '{"ping":true}' > /dev/null
