@@ -9,14 +9,16 @@ jobs:
   awaken:
     runs-on: ubuntu-latest
     steps:
-      - name: Pulse Roots (Voice)
-        run: curl -s "https://badseed.netlify.app/.netlify/functions/heartbeat-get" > /dev/null
+      - name: "🧘 Pulse: Roots (Voice)"
+        run: |
+          curl -s "https://badseed.netlify.app/.netlify/functions/heartbeat-get" > /dev/null
 
-      - name: Pulse Stalk (Value)
-        run: curl -s "https://badseedtoken.netlify.app/.netlify/functions/summary" > /dev/null
+      - name: "🌱 Pulse: Stalk (Value)"
+        run: |
+          curl -s "https://badseed-token.netlify.app/.netlify/functions/summary" > /dev/null
 
-      - name: Pulse Bloom (Agent)
+      - name: "🌸 Pulse: Bloom (Agent)"
         run: |
           curl -s -X POST "https://badseed-agent.netlify.app/.netlify/functions/grok-chat" \
-            -H "Content-Type: application/json" \
-            -d '{"ping":true}' > /dev/null
+          -H "Content-Type: application/json" \
+          -d '{"ping":true}' > /dev/null

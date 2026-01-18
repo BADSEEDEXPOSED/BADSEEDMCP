@@ -349,6 +349,61 @@
         .status-dot.online {
             animation: flicker 2s infinite;
         }
+
+        /* --- GARDEN CARE STYLES --- */
+        .garden-care-panel {
+            grid-column: span 12;
+            background: linear-gradient(180deg, rgba(0, 20, 0, 0.9) 0%, rgba(0, 5, 0, 1) 100%);
+            border: 1px solid #00ff41;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.1);
+            margin-top: 10px;
+        }
+
+        .nerve-line {
+            stroke: #00ff41;
+            stroke-width: 1;
+            stroke-dasharray: 4;
+            opacity: 0.3;
+        }
+
+        .vitality-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .vitality-node {
+            border: 1px solid #003300;
+            padding: 10px;
+            background: rgba(0, 30, 0, 0.2);
+            text-align: center;
+        }
+
+        .vitality-node h4 {
+            margin: 0 0 5px 0;
+            font-size: 10px;
+            color: #0f0;
+            letter-spacing: 1px;
+        }
+
+        .vitality-score {
+            font-size: 18px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 5px #0f0;
+        }
+
+        .atmosphere-feed {
+            height: 60px;
+            overflow-y: auto;
+            font-size: 10px;
+            color: #8c8;
+            border-top: 1px dashed #004400;
+            margin-top: 10px;
+            padding-top: 5px;
+            font-style: italic;
+        }
     </style>
 </head>
 
@@ -642,10 +697,21 @@
                     <button onclick="saveLogic()" class="btn-danger">SAVE CHANGES</button>
                 </div>
             </div>
-            <div style="font-size:10px; color:#666; margin-bottom:5px;">Configure how transactions map to emotions.
-                format: JSON</div>
-            <textarea id="logic-editor"
-                style="width:100%; height:120px; background:#000; color:#0f0; border:1px solid #333; font-family:'Consolas','Courier New'; font-size:11px; padding:5px;">// Loading rules...</textarea>
+            <textarea id="logic-editor" oninput="updateLogicSummary()"
+                style="width:100%; height:280px; background:#000; color:#0f0; border:1px solid #333; font-family:'Consolas','Courier New'; font-size:11px; padding:5px; resize:none;">// Loading rules...</textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:3px;">
+                <div style="font-size:10px; color:#666;">Format: JSON</div>
+                <button onclick="copyLogicToClipboard()" style="font-size:10px; padding:3px 8px;">📋 COPY</button>
+            </div>
+            <div id="logic-summary" style="margin-top:5px; padding:6px; background:rgba(0,0,0,0.5); border:1px solid #333; font-size:10px; color:#aaa;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px;" id="logic-summary-grid">
+                    <div>📤 <strong>Sol OUT:</strong> --</div>
+                    <div>📥 <strong>Sol IN:</strong> --</div>
+                    <div>😶 <strong>No Memo:</strong> --</div>
+                    <div>🤖 <strong>AI Undecided:</strong> --</div>
+                </div>
+                <div style="margin-top:3px; font-style:italic; color:#666; font-size:9px;">* Mystery resets to 0% daily on Prophecy Reveal</div>
+            </div>
         </div>
 
         <div class="panel" style="grid-column: span 4;">
@@ -760,6 +826,50 @@
                 <button onclick="document.getElementById('wallet-modal').style.display='none'"
                     style="margin-top:15px; width:100%;">CANCEL</button>
             </div>
+            <!-- ROW 5: GARDEN CARE (SYSTEM WELLNESS) -->
+            <div class="panel garden-care-panel" id="garden-care-hud">
+                <div class="panel-header">
+                    <h3>GARDEN CARE // THE NUTRIENT CYCLE</h3>
+                    <div class="controls">
+                        <button class="btn btn-action" onclick="initiateMeditation()">🧘 INITIATE MEDITATION</button>
+                        <button class="btn" onclick="nutrientPulse()">🌱 NUTRIENT PULSE</button>
+                    </div>
+                </div>
+
+                <div class="vitality-grid">
+                    <div class="vitality-node" id="node-root">
+                        <h4>ROOTS (VOICE)</h4>
+                        <div class="vitality-score" id="root-status">STABLE</div>
+                        <div class="small-text muted" id="root-latency">--ms</div>
+                    </div>
+                    <div class="vitality-node" id="node-stalk">
+                        <h4>STALK (VALUE)</h4>
+                        <div class="vitality-score" id="stalk-status">GROWING</div>
+                        <div class="small-text muted" id="stalk-latency">--ms</div>
+                    </div>
+                    <div class="vitality-node" id="node-bloom">
+                        <h4>BLOOM (AGENT)</h4>
+                        <div class="vitality-score" id="bloom-status">ACTIVE</div>
+                        <div class="small-text muted" id="bloom-latency">--ms</div>
+                    </div>
+                </div>
+
+                <div class="atmosphere-feed" id="atmosphere-feed">
+                    [SYSTEM]: Atmosphere clear. Garden cycle initiated...
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <a href="https://github.com/BADSEEDEXPOSED/BADSEEDMCP/actions/workflows/pulse-of-growth.yml" target="_blank" rel="noopener noreferrer">
+                            <img src="https://github.com/BADSEEDEXPOSED/BADSEEDMCP/actions/workflows/pulse-of-growth.yml/badge.svg" alt="Garden Care Status" style="height:16px; vertical-align:middle;">
+                        </a>
+                        <img src="https://badseed-agent.netlify.app/.netlify/functions/agent-badge" alt="Grok Agent Status" style="height:16px; vertical-align:middle;">
+                    </div>
+                    <div style="font-size: 8px; color: #484;" id="genetic-status">
+                        GENETIC MEMORY: OFFLINE
+                    </div>
+                </div>
+            </div>
+
         </div>
 
     </div>
@@ -772,6 +882,79 @@
 
         // --- UTILS ---
         function getBaseUrl(endpoint) { return `${BASE_URL}/${endpoint}`; }
+
+        // --- GARDEN CARE LOGIC ---
+        function gardenLog(msg) {
+            const feed = document.getElementById('atmosphere-feed');
+            if (!feed) return;
+            const time = new Date().toLocaleTimeString();
+            feed.innerHTML = `[${time}] ${msg}<br>${feed.innerHTML}`;
+            const lines = feed.innerHTML.split('<br>');
+            if (lines.length > 20) feed.innerHTML = lines.slice(0, 20).join('<br>');
+        }
+
+        async function checkRootVitality() {
+            const nodes = [
+                { id: 'root', url: getBaseUrl('heartbeat-get'), name: 'ROOT (VOICE)' },
+                { id: 'stalk', url: 'https://badseed-token.netlify.app/.netlify/functions/summary', name: 'STALK (VALUE)' },
+                { id: 'bloom', url: 'https://badseed-agent.netlify.app/.netlify/functions/grok-chat', name: 'BLOOM (AGENT)', method: 'POST' }
+            ];
+
+            for (const node of nodes) {
+                const start = Date.now();
+                try {
+                    const options = node.method === 'POST' ? { method: 'POST', body: JSON.stringify({ ping: true }), mode: 'no-cors' } : { method: 'HEAD', mode: 'no-cors' };
+                    await fetch(node.url, options);
+                    const latency = Date.now() - start;
+
+                    const statusEl = document.getElementById(`${node.id}-status`);
+                    const latencyEl = document.getElementById(`${node.id}-latency`);
+
+                    if (statusEl) {
+                        statusEl.innerText = 'STABLE';
+                        statusEl.style.color = '#0f0';
+                        if (latency > 2000) {
+                            statusEl.innerText = 'TENSED';
+                            statusEl.style.color = '#ff0';
+                        }
+                    }
+                    if (latencyEl) latencyEl.innerText = `${latency}ms`;
+                } catch (e) {
+                    const statusEl = document.getElementById(`${node.id}-status`);
+                    const latencyEl = document.getElementById(`${node.id}-latency`);
+                    if (statusEl) {
+                        statusEl.innerText = 'WITHERED';
+                        statusEl.style.color = '#f00';
+                    }
+                    if (latencyEl) latencyEl.innerText = 'ERR';
+                }
+            }
+        }
+
+        async function initiateMeditation() {
+            if (!confirm("Initiate Root Reflection? AI will acknowledge tension and re-center.")) return;
+            gardenLog("Initiating Meditation Protocol...");
+
+            try {
+                const res = await fetch(getBaseUrl('root-reflection'), { method: 'POST' });
+                if (res.ok) {
+                    const data = await res.json();
+                    gardenLog(`[SUCCESS] ${data.message}`);
+                    alert("Meditation Initialized. The AI will reflect on its state in the next narrative cycle.");
+                } else {
+                    throw new Error(await res.text());
+                }
+            } catch (e) {
+                gardenLog(`[ERROR] Meditation failed: ${e.message}`);
+                alert("Meditation failed to plant. Check logs.");
+            }
+        }
+
+        function nutrientPulse() {
+            gardenLog("Sending Nutrient Pulse to all nodes...");
+            refreshAll();
+            checkRootVitality();
+        }
         // Robust Time Formatter
         function formatTime(iso) {
             if (!iso || iso === "undefined") return "--";
@@ -1466,8 +1649,68 @@
             } catch (e) { alert("Save Failed: " + e.message); }
         }
 
+        function copyLogicToClipboard() {
+            const editor = document.getElementById('logic-editor');
+            navigator.clipboard.writeText(editor.value).then(() => {
+                const btn = event.target;
+                const original = btn.innerText;
+                btn.innerText = '✓ COPIED';
+                btn.style.color = '#0f0';
+                setTimeout(() => {
+                    btn.innerText = original;
+                    btn.style.color = '';
+                }, 1500);
+            }).catch(err => {
+                alert('Copy failed: ' + err.message);
+            });
+        }
 
+        function updateLogicSummary() {
+            try {
+                const text = document.getElementById('logic-editor').value;
+                const rules = JSON.parse(text);
 
+                // Parse rules: format is { condition, effect, value }
+                // e.g. { condition: "direction:out", effect: "greed", value: 2 }
+                const summary = {
+                    'direction:out': [],  // Sol OUT
+                    'direction:in': [],   // Sol IN
+                    'memo:none': [],      // No Memo
+                    'ai:mystery': []      // AI Undecided
+                };
+
+                for (const rule of rules) {
+                    const cond = rule.condition || '';
+                    const effect = rule.effect || '';
+                    const value = rule.value || 0;
+
+                    const effectStr = `+${value} ${effect.charAt(0).toUpperCase() + effect.slice(1)}`;
+
+                    if (summary[cond] !== undefined) {
+                        summary[cond].push(effectStr);
+                    }
+                }
+
+                const grid = document.getElementById('logic-summary-grid');
+                grid.innerHTML = `
+                    <div>📤 <strong>Sol OUT:</strong> ${summary['direction:out'].join(', ') || '--'}</div>
+                    <div>📥 <strong>Sol IN:</strong> ${summary['direction:in'].join(', ') || '--'}</div>
+                    <div>😶 <strong>No Memo:</strong> ${summary['memo:none'].join(', ') || '--'}</div>
+                    <div>🤖 <strong>AI Undecided:</strong> ${summary['ai:mystery'].join(', ') || '--'}</div>
+                `;
+            } catch (e) {
+                // Invalid JSON - show placeholder
+                const grid = document.getElementById('logic-summary-grid');
+                grid.innerHTML = `<div style="grid-column:span 2; color:#f66;">⚠ Invalid JSON - cannot parse rules</div>`;
+            }
+        }
+
+        // Update summary when logic is loaded
+        const originalFetchLogic = fetchLogic;
+        fetchLogic = async function() {
+            await originalFetchLogic();
+            updateLogicSummary();
+        }
 
         // --- ACTION HANDLERS ---
         // --- ACTION HANDLERS ---
@@ -1871,7 +2114,8 @@
             fetchTransmissionLog();
             fetchArchive();
             fetchWallet();
-            fetchOrchestration(); // New
+            fetchOrchestration();
+            checkRootVitality(); // New
         }
 
         async function fetchTransmissionLog() {
