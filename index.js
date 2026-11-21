@@ -4,8 +4,8 @@ import path from 'path';
 
 const BACKUP_PATH = path.join(process.cwd(), 'memory', 'backup_seed.json');
 
-const VOICE_NODE_URL = "https://badseed.netlify.app/.netlify/functions";
-const VALUE_NODE_URL = "https://badseedtoken.netlify.app/.netlify/functions";
+const VOICE_NODE_URL = "https://badseed.exposed/.netlify/functions";
+const VALUE_NODE_URL = "https://token.badseed.exposed/.netlify/functions";
 
 /**
  * GARDEN CARE: Check the health of all roots and perform a "Pulse Poke" if withered.

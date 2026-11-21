@@ -7,7 +7,15 @@
     "scripts": {
         "start": "node index.js",
         "dev": "node --watch index.js",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "badseed": "node ../badseed-orchestrator.js",
+        "badseed:all": "node ../badseed-orchestrator.js bsall",
+        "badseed:voice": "node ../badseed-orchestrator.js bsvoice",
+        "badseed:value": "node ../badseed-orchestrator.js bsvalue",
+        "badseed:agent": "node ../badseed-orchestrator.js bsagent",
+        "badseed:soil": "node ../badseed-orchestrator.js bssoil",
+        "badseed:god": "node ../badseed-orchestrator.js bsgod",
+        "badseed:brain": "node ../badseed-orchestrator.js bsbrain"
     },
     "dependencies": {
         "@langchain/core": "^0.3.18",

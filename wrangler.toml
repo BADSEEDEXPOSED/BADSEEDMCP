@@ -1,0 +1,8 @@
+name = "badseed-mcp"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[routes]]
+pattern = "mcp.badseed.exposed"
+custom_domain = true

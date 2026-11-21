@@ -1,3 +1,11 @@
 node_modules
 .env
 .DS_Store
+
+# Cloudflare Wrangler & local logs
+.wrangler/
+*.log
+tmpclaude-*
+build-restored-live/
+.netlify-live-check.html
+_ul
