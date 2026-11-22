@@ -29,20 +29,35 @@
         console.log("Buffer Loaded:", typeof window.Buffer);
     </script>
     <script>
-        // --- WALLET STANDARD SUPPORT (EARLY BINDING) ---
-        // Moved to HEAD to catch events that fire before BODY loads
+        // --- WALLET STANDARD SUPPORT (OFFICIAL SPEC) ---
         const standardAdapters = [];
-        try {
-            function onWalletRegistered(event) {
-                const { register } = event.detail;
-                register((adapter) => {
-                    standardAdapters.push(adapter);
-                    // Dispatch custom event to notify UI if needed
+        (function initWalletStandard() {
+            const register = (wallet) => {
+                if (!wallet || !wallet.name) return;
+                const feats = wallet.features || {};
+                const isSolana = Array.isArray(wallet.chains)
+                    ? wallet.chains.some(c => String(c).startsWith('solana:'))
+                    : !!(feats['solana:signAndSendTransaction'] || feats['solana:signTransaction']);
+                if (!isSolana && !feats['standard:connect']) return;
+                if (!standardAdapters.some(w => w.name === wallet.name)) {
+                    standardAdapters.push(wallet);
                     window.dispatchEvent(new Event('wallet-standard-updated'));
-                });
-            }
-            window.addEventListener('register-wallet', onWalletRegistered);
-        } catch (e) { console.error("Standard Wallet Init Error", e); }
+                }
+            };
+            const appApi = Object.freeze({ register });
+            window.addEventListener('wallet-standard:register-wallet', (event) => {
+                try {
+                    if (typeof event.detail === 'function') event.detail(appApi);
+                    else if (event.detail && typeof event.detail.register === 'function') event.detail.register(register);
+                } catch (e) { console.warn('Wallet Standard register error:', e); }
+            });
+            try {
+                window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: appApi }));
+            } catch (e) { console.warn('Wallet Standard app-ready error:', e); }
+            window.addEventListener('DOMContentLoaded', () => {
+                try { window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: appApi })); } catch {}
+            });
+        })();
     </script>
     <style>
         body {
@@ -420,6 +435,7 @@
         <div class="header-right" style="display:flex; gap:10px; align-items:center;">
             <button id="wallet-btn" onclick="openWalletSelector()" style="border-color:#0ff; color:#0ff;">CONNECT
                 WALLET</button>
+            <button id="lock-btn" onclick="lockConsole()" style="border-color:#f66; color:#f66;" title="Lock Console">LOCK</button>
             <div class="heartbeat" id="heartbeat-display">
                 <div class="status-dot" id="hb-dot"></div>
                 <span id="hb-text">INITIALIZING...</span>
@@ -1205,37 +1221,57 @@
             console.log("BADSEED: refreshWalletList() called");
             const list = document.getElementById('wallet-list');
 
-            // === WALLET STANDARD DETECTION (DISABLED FOR STABILITY - FORCING LEGACY API) ===
-            // try {
-            //     if (window.navigator && window.navigator.wallets) {
-            //         // Standard Wallet logic commented out to ensure we use valid Legacy providers
-            //         // that support signAndSendTransaction directly.
-            //     }
-            // } catch (e) {
-            //     console.error("BADSEED: Standard wallet detection error:", e);
-            // }
+            // === WALLET STANDARD DETECTION ===
+            try {
+                window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', {
+                    detail: {
+                        register: (wallet) => {
+                            if (wallet && wallet.name && !standardAdapters.some(w => w.name === wallet.name)) {
+                                standardAdapters.push(wallet);
+                            }
+                        }
+                    }
+                }));
+            } catch {}
+            standardAdapters.forEach((w) => {
+                const feats = w.features || {};
+                if (feats['standard:connect']) {
+                    accumulatedWallets.set(w.name, { name: w.name, provider: w, type: 'standard' });
+                }
+            });
 
             // === LEGACY WALLET DETECTION ===
-
-            // 1. Check for Conflicts (Multiple Wallets)
+            if (window.phantom && window.phantom.solana && !accumulatedWallets.has('Phantom')) {
+                accumulatedWallets.set('Phantom', { name: 'Phantom', provider: window.phantom.solana, type: 'legacy' });
+            }
             if (window.solana && window.solana.providers) {
-                console.log("BADSEED: Detected window.solana.providers array");
                 window.solana.providers.forEach(p => {
-                    if (p.isPhantom) accumulatedWallets.set('Phantom', { name: 'Phantom', provider: p, type: 'legacy' });
-                    if (p.isJupiter) accumulatedWallets.set('Jupiter', { name: 'Jupiter', provider: p, type: 'legacy' });
+                    if (p.isPhantom && !accumulatedWallets.has('Phantom')) accumulatedWallets.set('Phantom', { name: 'Phantom', provider: p, type: 'legacy' });
+                    if (p.isJupiter && !accumulatedWallets.has('Jupiter')) accumulatedWallets.set('Jupiter', { name: 'Jupiter', provider: p, type: 'legacy' });
+                    if (p.isSolflare && !accumulatedWallets.has('Solflare')) accumulatedWallets.set('Solflare', { name: 'Solflare', provider: p, type: 'legacy' });
                 });
             }
-
-            // 2. Explicit Global Checks
-            if (window.solana && window.solana.isPhantom) accumulatedWallets.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
-            if (window.jupiter) accumulatedWallets.set('Jupiter', { name: 'Jupiter', provider: window.jupiter, type: 'legacy' });
-            if (window.solflare || (window.solana && window.solana.isSolflare)) {
+            if (window.solana && window.solana.isPhantom && !accumulatedWallets.has('Phantom')) {
+                accumulatedWallets.set('Phantom', { name: 'Phantom', provider: window.solana, type: 'legacy' });
+            }
+            if ((window.jupiter && (window.jupiter.solana || window.jupiter.connect)) && !accumulatedWallets.has('Jupiter')) {
+                accumulatedWallets.set('Jupiter', { name: 'Jupiter', provider: window.jupiter.solana || window.jupiter, type: 'legacy' });
+            }
+            if ((window.solflare || (window.solana && window.solana.isSolflare)) && !accumulatedWallets.has('Solflare')) {
                 accumulatedWallets.set('Solflare', { name: 'Solflare', provider: window.solflare || window.solana, type: 'legacy' });
             }
-            if (window.backpack) accumulatedWallets.set('Backpack', { name: 'Backpack', provider: window.backpack, type: 'legacy' });
-            if (window.coinbaseSolana) accumulatedWallets.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
-            if (window.trustwallet) accumulatedWallets.set('Trust Wallet', { name: 'Trust Wallet', provider: window.trustwallet, type: 'legacy' });
-            if (window.braveSolana) accumulatedWallets.set('Brave Wallet', { name: 'Brave Wallet', provider: window.braveSolana, type: 'legacy' });
+            if ((window.backpack && (window.backpack.solana || window.backpack.connect)) && !accumulatedWallets.has('Backpack')) {
+                accumulatedWallets.set('Backpack', { name: 'Backpack', provider: window.backpack.solana || window.backpack, type: 'legacy' });
+            }
+            if (window.coinbaseSolana && !accumulatedWallets.has('Coinbase')) {
+                accumulatedWallets.set('Coinbase', { name: 'Coinbase', provider: window.coinbaseSolana, type: 'legacy' });
+            }
+            if (window.braveSolana && !accumulatedWallets.has('Brave Wallet')) {
+                accumulatedWallets.set('Brave Wallet', { name: 'Brave Wallet', provider: window.braveSolana, type: 'legacy' });
+            }
+            if (window.solana && typeof window.solana.connect === 'function' && accumulatedWallets.size === 0) {
+                accumulatedWallets.set('Solana Wallet', { name: 'Solana Wallet', provider: window.solana, type: 'legacy' });
+            }
 
             // 3. FORCE JUPITER (If not found yet) - USER REQUIREMENT
             if (!accumulatedWallets.has('Jupiter')) {
@@ -1326,24 +1362,43 @@
             }
         }
 
+        async function lockConsole() {
+            try { await fetch('/api/lock', { method: 'POST' }); } catch {}
+            window.location.reload();
+        }
+
         async function connectStandardWallet(walletStruct, silent = false) {
             try {
-                const adapter = walletStruct.provider;
-                await adapter.connect();
-                const pubKey = adapter.publicKey.toString();
-                handleConnectionSuccess(walletStruct.name, adapter, pubKey);
-
-                // Setup Standard Events (If supported by adapter interface)
-                // Most standard adapters expose 'on' for 'disconnect' etc.
-                if (adapter.on) {
-                    adapter.on('disconnect', handleDisconnect);
-                    adapter.on('accountChanged', (pk) => {
-                        if (pk) handleConnectionSuccess(walletStruct.name, adapter, pk.toString());
-                        else handleDisconnect();
+                const wallet = walletStruct.provider;
+                const connectFeat = wallet.features && wallet.features['standard:connect'];
+                if (!connectFeat) throw new Error('Wallet does not support standard:connect');
+                const res = await connectFeat.connect(silent ? { silent: true } : undefined);
+                const account = (res && res.accounts && res.accounts[0]) || (wallet.accounts && wallet.accounts[0]);
+                if (!account || !account.address) throw new Error('No account returned by wallet');
+                const pubKey = account.address;
+                const wrapped = {
+                    isWalletStandard: true,
+                    name: wallet.name,
+                    wallet,
+                    account,
+                    isConnected: true,
+                    publicKey: new solanaWeb3.PublicKey(pubKey),
+                    connect: async () => ({ publicKey: new solanaWeb3.PublicKey(pubKey) })
+                };
+                handleConnectionSuccess(walletStruct.name, wrapped, pubKey);
+                const eventsFeat = wallet.features && wallet.features['standard:events'];
+                if (eventsFeat && typeof eventsFeat.on === 'function') {
+                    eventsFeat.on('change', ({ accounts }) => {
+                        if (!accounts || accounts.length === 0) handleDisconnect();
+                        else {
+                            wrapped.account = accounts[0];
+                            wrapped.publicKey = new solanaWeb3.PublicKey(accounts[0].address);
+                            handleConnectionSuccess(walletStruct.name, wrapped, accounts[0].address);
+                        }
                     });
                 }
             } catch (e) {
-                if (!silent) alert("Connection Failed: " + e.message);
+                if (!silent) alert("Connection Failed: " + (e.message || e));
                 console.error(e);
             }
         }
@@ -2368,6 +2423,32 @@
                     // This might be the cause of "Not Authorized" if we selected the wrong provider global
                 }
 
+                if (provider.isWalletStandard && provider.wallet) {
+                    const serialized = transaction.serialize({ requireAllSignatures: false, verifySignatures: false });
+                    const sas = provider.wallet.features['solana:signAndSendTransaction'];
+                    if (sas) {
+                        const [out] = await sas.signAndSendTransaction({
+                            transaction: serialized,
+                            account: provider.account,
+                            chain: 'solana:mainnet'
+                        });
+                        const sigBytes = out && out.signature;
+                        if (sigBytes) {
+                            // Base58 encode or hex fallback; solanaWeb3.bs58 may not be global, so use signTransaction fallback if needed
+                            return typeof sigBytes === 'string' ? sigBytes : Array.from(sigBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                        }
+                    }
+                    const st = provider.wallet.features['solana:signTransaction'];
+                    if (st) {
+                        const [out] = await st.signTransaction({
+                            transaction: serialized,
+                            account: provider.account,
+                            chain: 'solana:mainnet'
+                        });
+                        return await connection.sendRawTransaction(out.signedTransaction, options);
+                    }
+                    throw new Error('Wallet Standard wallet does not support signing');
+                }
                 const result = await provider.signAndSendTransaction(transaction, options);
 
                 const signature = result.signature || result;
