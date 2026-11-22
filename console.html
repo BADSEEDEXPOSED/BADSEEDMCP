@@ -953,6 +953,31 @@
                 <span id="wallet-status" class="timestamp">NO WALLET</span>
             </div>
 
+            <div style="border:1px solid rgba(186,202,219,0.16); border-left:2px solid var(--moss-bright); background:var(--bg-sub); padding:10px 12px; border-radius:2px; margin-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span class="section-kicker" style="margin:0; color:var(--moss-bright);">UNCLAIMED CREATOR REWARDS</span>
+                    <button onclick="fetchCreatorVaults()" class="btn-mini" title="Refresh vault balances">↻</button>
+                </div>
+                <div class="data-row"><span class="label">PUMP.FUN VAULT</span><span class="value highlight" id="vault-pump-bal">...</span></div>
+                <div class="data-row"><span class="label">PUMPSWAP VAULT</span><span class="value" id="vault-swap-bal">...</span></div>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                    <button id="btn-claim-rewards" class="btn-action" style="flex:1;" onclick="claimCreatorRewards()">⚡ CLAIM REWARDS</button>
+                    <button class="btn-silver" style="flex:1;" onclick="toggleDonationForward()">🌱 FORWARD / CALL OUT</button>
+                </div>
+                <div id="reward-forward-ui" style="display:none; margin-top:10px; border-top:1px solid rgba(186,202,219,0.14); padding-top:10px;">
+                    <div style="font-size:9px; color:var(--text-muted); margin-bottom:4px; letter-spacing:0.1em;">DEST: 25T3...BKGKZ (DONATION VAULT)</div>
+                    <input id="forward-sol-amt" type="number" step="0.001" placeholder="SOL amount to forward (e.g. 0.25)" style="width:100%; margin-bottom:6px;">
+                    <label style="display:flex; align-items:center; gap:6px; font-size:10px; color:var(--text-secondary); margin-bottom:6px;">
+                        <input type="checkbox" id="forward-announce-x"> Also announce on X.com
+                    </label>
+                    <textarea id="forward-callout-text" rows="3" placeholder="Optional custom X.com call-out (leave blank for default)" style="width:100%; margin-bottom:6px; font-size:10px;"></textarea>
+                    <div style="display:flex; gap:6px;">
+                        <button id="btn-forward-sol" class="btn-action" style="flex:1;" onclick="executeForwardToDonation()">SEND SOL</button>
+                        <button class="btn-silver" onclick="executeRewardsCalloutOnly()" title="Post announcement on X.com without transferring SOL">📢 CALL OUT ONLY</button>
+                    </div>
+                </div>
+            </div>
+
             <div style="display:flex; flex-direction:column; gap:10px; margin-top:4px;">
                 <button class="btn-action btn-full" onclick="openSacrifice()">💀 SACRIFICE (BURN)</button>
                 <button class="btn-silver btn-full" onclick="openMessage()">💬 SEND MESSAGE</button>
@@ -1298,6 +1323,177 @@
             }
         }
 
+        // --- CREATOR REWARDS (PUMP.FUN & PUMPSWAP ON-CHAIN VAULTS) ---
+        const CREATOR_WALLET_ADDR = "9TyzcephhXEw67piYNc72EJtgVmbq3AZhyPFSvdfXWdr";
+        const DONATION_WALLET_ADDR = "25T3BcqfWeyoGLcr8wrsywmTyFLAzon5BRSNGafBKGKZ";
+        const PUMP_PROGRAM_ADDR = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
+        const PUMP_CREATOR_VAULT_ADDR = "7TZyvnv1Lx65QGiVXBBZLRf9djb7BcbaL8ZPJxyV8x9a";
+        const PUMPSWAP_CREATOR_VAULT_ADDR = "8vkEnqKnDxvDscExjjtJzWs69SwfLqMK2GNPH96sQctL";
+        const PUMP_EVENT_AUTHORITY_ADDR = "Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1";
+        const HELIUS_RPC_CONSOLE = "https://mainnet.helius-rpc.com/?api-key=65cfa9f7-7bfe-44ff-8e98-24ff80b01e8c";
+        let lastPumpVaultSol = 0;
+
+        async function fetchCreatorVaults() {
+            const pEl = document.getElementById('vault-pump-bal');
+            const sEl = document.getElementById('vault-swap-bal');
+            try {
+                const conn = new solanaWeb3.Connection(HELIUS_RPC_CONSOLE, 'confirmed');
+                const [pLamports, sLamports] = await Promise.all([
+                    conn.getBalance(new solanaWeb3.PublicKey(PUMP_CREATOR_VAULT_ADDR)),
+                    conn.getBalance(new solanaWeb3.PublicKey(PUMPSWAP_CREATOR_VAULT_ADDR))
+                ]);
+                lastPumpVaultSol = pLamports / 1e9;
+                const swapSol = sLamports / 1e9;
+                if (pEl) pEl.textContent = lastPumpVaultSol.toFixed(6) + ' SOL';
+                if (sEl) sEl.textContent = swapSol.toFixed(6) + ' SOL';
+            } catch (e) {
+                console.warn('Vault balance fetch error:', e);
+                if (pEl) pEl.textContent = 'ERR';
+                if (sEl) sEl.textContent = 'ERR';
+            }
+        }
+
+        function toggleDonationForward() {
+            const el = document.getElementById('reward-forward-ui');
+            if (!el) return;
+            const show = el.style.display === 'none';
+            el.style.display = show ? 'block' : 'none';
+            const amtEl = document.getElementById('forward-sol-amt');
+            if (show && amtEl && !amtEl.value && lastPumpVaultSol > 0) {
+                amtEl.value = lastPumpVaultSol.toFixed(4);
+            }
+        }
+
+        async function claimCreatorRewards() {
+            if (!userWallet) return openWalletSelector();
+            if (userWallet !== CREATOR_WALLET_ADDR) {
+                return alert("Connect with the Creator Wallet (" + CREATOR_WALLET_ADDR.slice(0, 6) + "..." + CREATOR_WALLET_ADDR.slice(-4) + ") to claim Pump.fun creator rewards.");
+            }
+            if (!confirm("⚡ CLAIM PUMP.FUN CREATOR REWARDS?\nVault: " + lastPumpVaultSol.toFixed(6) + " SOL\nRecipient: " + CREATOR_WALLET_ADDR)) return;
+
+            const btn = document.getElementById('btn-claim-rewards');
+            if (btn) { btn.disabled = true; btn.textContent = 'CLAIMING...'; }
+            try {
+                const conn = new solanaWeb3.Connection(HELIUS_RPC_CONSOLE, 'confirmed');
+                const creatorPk = new solanaWeb3.PublicKey(userWallet);
+                const vaultPk = new solanaWeb3.PublicKey(PUMP_CREATOR_VAULT_ADDR);
+                const eventAuthPk = new solanaWeb3.PublicKey(PUMP_EVENT_AUTHORITY_ADDR);
+                const pumpPk = new solanaWeb3.PublicKey(PUMP_PROGRAM_ADDR);
+
+                // Official Anchor discriminator for global:collect_creator_fee
+                const data = new Uint8Array([20, 22, 86, 123, 198, 28, 219, 132]);
+                const ix = new solanaWeb3.TransactionInstruction({
+                    programId: pumpPk,
+                    keys: [
+                        { pubkey: creatorPk, isSigner: true, isWritable: true },
+                        { pubkey: vaultPk, isSigner: false, isWritable: true },
+                        { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false },
+                        { pubkey: eventAuthPk, isSigner: false, isWritable: false },
+                        { pubkey: pumpPk, isSigner: false, isWritable: false },
+                    ],
+                    data
+                });
+
+                const tx = new solanaWeb3.Transaction().add(ix);
+                const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.lastValidBlockHeight = lastValidBlockHeight;
+                tx.feePayer = creatorPk;
+
+                const claimedEstimate = lastPumpVaultSol;
+                const sig = await sendTransactionWrapper(tx, conn, activeProvider || window.solana);
+                alert("✅ Creator Rewards Claimed!\nTx: " + sig);
+
+                const amtEl = document.getElementById('forward-sol-amt');
+                if (amtEl && claimedEstimate > 0) amtEl.value = claimedEstimate.toFixed(4);
+                const fwd = document.getElementById('reward-forward-ui');
+                if (fwd) fwd.style.display = 'block';
+
+                setTimeout(() => { fetchCreatorVaults(); fetchWallet(); }, 3000);
+            } catch (e) {
+                console.error('Claim Creator Rewards Error:', e);
+                alert("Claim Failed: " + (e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = '⚡ CLAIM REWARDS'; }
+            }
+        }
+
+        async function postRewardsCallout(amountSol, customText) {
+            const text = (customText && customText.trim())
+                ? customText.trim()
+                : `🌱 BADSEED CREATOR REWARDS 🌱\n\n${Number(amountSol).toFixed(4)} SOL claimed & forwarded to the Seed Donation Vault.\n\n#BADSEED #Solana #Crypto`;
+            const res = await fetch(getBaseUrl('x-poster'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || ('HTTP ' + res.status));
+            return data;
+        }
+
+        async function executeForwardToDonation() {
+            if (!userWallet) return openWalletSelector();
+            const amt = parseFloat(document.getElementById('forward-sol-amt').value);
+            if (!Number.isFinite(amt) || amt <= 0) return alert("Enter a valid SOL amount > 0.");
+            const announce = document.getElementById('forward-announce-x').checked;
+            const customText = document.getElementById('forward-callout-text').value;
+            if (!confirm(`🌱 FORWARD ${amt} SOL TO DONATION WALLET (25T3...BKGKZ)?${announce ? '\n+ Post call-out to X.com' : ''}`)) return;
+
+            const btn = document.getElementById('btn-forward-sol');
+            if (btn) { btn.disabled = true; btn.textContent = 'SENDING...'; }
+            try {
+                const conn = new solanaWeb3.Connection(HELIUS_RPC_CONSOLE, 'confirmed');
+                const fromPk = new solanaWeb3.PublicKey(userWallet);
+                const toPk = new solanaWeb3.PublicKey(DONATION_WALLET_ADDR);
+                const tx = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: fromPk,
+                        toPubkey: toPk,
+                        lamports: Math.floor(amt * solanaWeb3.LAMPORTS_PER_SOL)
+                    })
+                );
+                const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.lastValidBlockHeight = lastValidBlockHeight;
+                tx.feePayer = fromPk;
+
+                const sig = await sendTransactionWrapper(tx, conn, activeProvider || window.solana);
+                let msg = "✅ Forwarded " + amt + " SOL to Donation Wallet!\nTx: " + sig;
+
+                if (announce) {
+                    try {
+                        await postRewardsCallout(amt, customText);
+                        msg += "\n📢 Announced on X.com!";
+                        setTimeout(fetchTransmissionLog, 2000);
+                    } catch (xErr) {
+                        msg += "\n⚠️ X.com call-out failed: " + xErr.message;
+                    }
+                }
+                alert(msg);
+                setTimeout(() => { fetchWallet(); fetchCreatorVaults(); }, 3000);
+            } catch (e) {
+                console.error('Forward to Donation Error:', e);
+                alert("Forward Failed: " + (e.message || e));
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'SEND SOL'; }
+            }
+        }
+
+        async function executeRewardsCalloutOnly() {
+            const amt = parseFloat(document.getElementById('forward-sol-amt').value) || lastPumpVaultSol;
+            const customText = document.getElementById('forward-callout-text').value.trim();
+            if (!customText && !(amt > 0)) return alert("Enter a SOL amount or custom call-out message first.");
+            if (!confirm("📢 POST REWARDS CALL-OUT TO X.COM NOW?")) return;
+            try {
+                await postRewardsCallout(amt, customText);
+                alert("📢 Call-out posted to X.com!");
+                setTimeout(fetchTransmissionLog, 2000);
+            } catch (e) {
+                alert("Call-out Failed: " + (e.message || e));
+            }
+        }
+
         async function fetchVisitorLocations() {
             const list = document.getElementById('visitor-loc-list');
             const meta = document.getElementById('visitor-loc-meta');
@@ -1407,6 +1603,8 @@
 
         setTimeout(() => { fetchSoilAnalytics();
         fetchLocationBlurState();
+        fetchCreatorVaults();
+        setInterval(fetchCreatorVaults, 30000);
         fetchVisitorLocations();
         setInterval(fetchVisitorLocations, 30000); }, 2000);
 
