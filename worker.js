@@ -211,7 +211,7 @@ export default {
     }
 
     // 3. Static icon assets (favicon/logos)
-    if (p === '/favicon.ico' || p === '/logo192.png' || p === '/logo512.png' || p === '/logo.png') {
+    if (p === '/favicon.ico' || p === '/logo192.png' || p === '/logo512.png' || p === '/logo.png' || p === '/cursoroff.gif' || p === '/cursoron.gif') {
       if (env.ASSETS) return env.ASSETS.fetch(request);
     }
 
