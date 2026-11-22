@@ -1074,14 +1074,14 @@
             const nodes = [
                 { id: 'root', url: getBaseUrl('heartbeat-get'), name: 'ROOT (VOICE)' },
                 { id: 'stalk', url: 'https://token.badseed.exposed/.netlify/functions/summary', name: 'STALK (VALUE)' },
-                { id: 'bloom', url: 'https://agent.badseed.exposed/.netlify/functions/grok-chat', name: 'BLOOM (AGENT)', method: 'POST' }
+                { id: 'bloom', url: 'https://agent.badseed.exposed/.netlify/functions/agent-badge', name: 'BLOOM (AGENT)' }
             ];
 
             for (const node of nodes) {
                 const start = Date.now();
                 try {
-                    const options = node.method === 'POST' ? { method: 'POST', body: JSON.stringify({ ping: true }), mode: 'no-cors' } : { method: 'HEAD', mode: 'no-cors' };
-                    await fetch(node.url, options);
+                    const res = await fetch(node.url, { method: 'GET', cache: 'no-store' });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
                     const latency = Date.now() - start;
 
                     const statusEl = document.getElementById(`${node.id}-status`);
@@ -1143,7 +1143,7 @@
                 const diff = Math.floor((now - date) / 1000);
                 if (diff < 60) return `${diff}s ago`;
                 if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-                if (diff < 3600) return `${Math.floor(diff / 60)}h ago`;
+                if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
                 if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
                 return date.toLocaleDateString();
             } catch (e) { return "ERROR"; }
@@ -1795,9 +1795,14 @@
 
         window.forceArchive = async () => {
             if (!confirm("📜 FORCE ARWEAVE SNAPSHOT?")) return;
-            await fetch(getBaseUrl('manual-trigger-archive'));
-            alert("Archive process started...");
-            setTimeout(fetchArchive, 5000);
+            try {
+                const res = await fetch(getBaseUrl('manual-trigger-archive'), { method: 'POST' });
+                const data = await res.json();
+                alert(data.message || (res.ok ? "Archive process started..." : "Archive trigger failed"));
+            } catch (e) {
+                alert("Archive Trigger Failed: " + e.message);
+            }
+            setTimeout(fetchArchive, 8000);
         };
 
         // --- CONTROLS IMPLEMENTATION ---
@@ -2122,19 +2127,32 @@
 
         async function loadDevConfig() {
             try {
-                const res = await fetch('/.netlify/functions/dapp-config');
+                const res = await fetch(getBaseUrl('dapp-config'));
+                if (!res.ok) return;
                 const data = await res.json();
                 ritualState.targetMint = data.targetMint || ritualState.targetMint;
                 ritualState.sweepDest = data.destinationWallet || ritualState.sweepDest;
-                // update inputs
                 document.getElementById('dev-target').value = ritualState.targetMint;
                 document.getElementById('dev-dest').value = ritualState.sweepDest;
-            } catch (e) { }
+            } catch (e) { console.warn('loadDevConfig failed:', e); }
         }
 
         async function saveDevConfig() {
-            // ... post to dapp-config ...
-            alert("Local Config Updated");
+            try {
+                const targetMint = document.getElementById('dev-target').value.trim();
+                const destinationWallet = document.getElementById('dev-dest').value.trim();
+                ritualState.targetMint = targetMint;
+                ritualState.sweepDest = destinationWallet;
+                const res = await fetch(getBaseUrl('dapp-config'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetMint, destinationWallet })
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                alert("Cloud Config Saved");
+            } catch (e) {
+                alert("Config Save Failed: " + e.message);
+            }
         }
 
         function openMessage() {
