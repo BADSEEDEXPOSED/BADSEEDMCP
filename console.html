@@ -1104,6 +1104,23 @@
             </div>
         </section>
 
+
+        <!-- ROW 8: VISITOR LOCATION LOGS (12 - FULL WIDTH) -->
+        <section class="panel span-12">
+            <div class="panel-header">
+                <div>
+                    <h3>VISITOR LOCATION LOGS // SOW</h3>
+                    <div id="visitor-loc-meta" class="panel-sub">LAST 7 DAYS · RECORDED VISITS: --</div>
+                </div>
+                <div class="controls">
+                    <button onclick="fetchVisitorLocations()" class="btn-action">REFRESH</button>
+                </div>
+            </div>
+            <div id="visitor-loc-list" class="scroll-list" style="max-height:220px;">
+                <div class="list-item muted">Loading recorded visitor locations...</div>
+            </div>
+        </section>
+
     </main>
 
     <!-- MODALS -->
@@ -1238,6 +1255,48 @@
 
         // (Standard Listener moved to HEAD)
 
+
+        async function fetchVisitorLocations() {
+            const list = document.getElementById('visitor-loc-list');
+            const meta = document.getElementById('visitor-loc-meta');
+            if (!list) return;
+            try {
+                const res = await fetch('https://token.badseed.exposed/.netlify/functions/get-visitor-logs', { cache: 'no-store' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const logs = await res.json();
+                const items = Array.isArray(logs) ? logs.slice().reverse() : [];
+                if (meta) meta.textContent = `LAST 7 DAYS · RECORDED VISITS: ${items.length}`;
+                if (items.length === 0) {
+                    list.innerHTML = '<div class="list-item muted">No visitor locations recorded in the last 7 days.</div>';
+                    return;
+                }
+                list.innerHTML = items.map(entry => {
+                    const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '--';
+                    const ip = entry.ip || 'unknown';
+                    const lat = entry.location?.lat;
+                    const lng = entry.location?.lng;
+                    const hasCoords = typeof lat === 'number' && typeof lng === 'number';
+                    const coordsHtml = hasCoords
+                        ? `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener noreferrer" style="color:var(--moss-bright); text-decoration:none;">${lat.toFixed(4)}, ${lng.toFixed(4)} ↗</a>`
+                        : '<span class="muted">no coords</span>';
+                    const tz = entry.metadata?.timezone || '';
+                    const screen = entry.metadata?.screen || '';
+                    const platform = entry.metadata?.platform || '';
+                    const extra = [tz, screen, platform].filter(Boolean).join(' · ');
+                    return `<div class="list-item" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <div>
+                            <span style="color:var(--text-muted); margin-right:8px;">${ts}</span>
+                            <strong style="color:var(--text-primary); margin-right:10px;">${ip}</strong>
+                            ${coordsHtml}
+                        </div>
+                        <div style="font-size:10px; color:var(--text-muted);">${extra}</div>
+                    </div>`;
+                }).join('');
+            } catch (e) {
+                list.innerHTML = `<div class="list-item" style="color:#f87171;">Failed to load location logs: ${e.message}</div>`;
+            }
+        }
+
         // --- SOIL ANALYTICS ---
         let soilRealtimeInterval = null;
 
@@ -1304,7 +1363,9 @@
             soilRealtimeInterval = setInterval(fetchAndUpdate, 10000);
         }
 
-        setTimeout(() => { fetchSoilAnalytics(); }, 2000);
+        setTimeout(() => { fetchSoilAnalytics();
+        fetchVisitorLocations();
+        setInterval(fetchVisitorLocations, 30000); }, 2000);
 
         // --- UTILS ---
         function getBaseUrl(endpoint) { return `${BASE_URL}/${endpoint}`; }
