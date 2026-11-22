@@ -1113,6 +1113,7 @@
                     <div id="visitor-loc-meta" class="panel-sub">LAST 7 DAYS · RECORDED VISITS: --</div>
                 </div>
                 <div class="controls">
+                    <button id="btn-loc-blur" onclick="toggleLocationBlur()" class="btn-danger">ADDR: BLURRED</button>
                     <button onclick="fetchVisitorLocations()" class="btn-action">REFRESH</button>
                 </div>
             </div>
@@ -1256,6 +1257,47 @@
         // (Standard Listener moved to HEAD)
 
 
+        let isLocationUnblurred = false;
+
+        function renderLocationBlurBtn() {
+            const btn = document.getElementById('btn-loc-blur');
+            if (!btn) return;
+            if (isLocationUnblurred) {
+                btn.textContent = 'ADDR: UNBLURRED (CLICK TO BLUR)';
+                btn.className = 'btn-action';
+            } else {
+                btn.textContent = 'ADDR: BLURRED (CLICK TO UNBLUR)';
+                btn.className = 'btn-danger';
+            }
+        }
+
+        async function fetchLocationBlurState() {
+            try {
+                const res = await fetch(getBaseUrl('dapp-config'), { cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    isLocationUnblurred = Boolean(data.locationUnblurred);
+                    renderLocationBlurBtn();
+                }
+            } catch {}
+        }
+
+        async function toggleLocationBlur() {
+            const next = !isLocationUnblurred;
+            try {
+                const res = await fetch(getBaseUrl('dapp-config'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ locationUnblurred: next })
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                isLocationUnblurred = next;
+                renderLocationBlurBtn();
+            } catch (e) {
+                alert('Failed to update remote blur state: ' + e.message);
+            }
+        }
+
         async function fetchVisitorLocations() {
             const list = document.getElementById('visitor-loc-list');
             const meta = document.getElementById('visitor-loc-meta');
@@ -1364,6 +1406,7 @@
         }
 
         setTimeout(() => { fetchSoilAnalytics();
+        fetchLocationBlurState();
         fetchVisitorLocations();
         setInterval(fetchVisitorLocations, 30000); }, 2000);
 
