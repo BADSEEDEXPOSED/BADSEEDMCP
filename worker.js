@@ -161,7 +161,7 @@ export default {
 
     // 1. Existing brain-cycle endpoint (used by master cron)
     if (p === '/.netlify/functions/brain-cycle' || p === '/brain-cycle') {
-      const cortex = new BadSeedCortex();
+      const cortex = new BadSeedCortex(env.ADMIN_API_KEY || '');
       try {
         const thoughts = await cortex.think();
         return new Response(JSON.stringify({ status: 'Cycle Complete', thoughts }), {
@@ -174,6 +174,32 @@ export default {
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
         });
       }
+    }
+
+    // 1b. Authenticated Voice Node proxy (injects X-Admin-Key server-side after verifying PIN session)
+    if (p.startsWith('/api/voice/')) {
+      const authed = await isAuthenticated(request, pinSecret);
+      if (!authed) {
+        return new Response(JSON.stringify({ error: 'Unauthorized: Unlock console first' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        });
+      }
+      const endpoint = p.slice('/api/voice/'.length);
+      const targetUrl = `https://badseed.exposed/.netlify/functions/${endpoint}${url.search}`;
+      const fwdHeaders = new Headers();
+      const ct = request.headers.get('Content-Type');
+      if (ct) fwdHeaders.set('Content-Type', ct);
+      if (env.ADMIN_API_KEY) fwdHeaders.set('X-Admin-Key', env.ADMIN_API_KEY);
+      const body = request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : undefined;
+      const upstream = await fetch(targetUrl, {
+        method: request.method,
+        headers: fwdHeaders,
+        body,
+      });
+      const outHeaders = new Headers(upstream.headers);
+      outHeaders.set('Cache-Control', 'no-store');
+      return new Response(upstream.body, { status: upstream.status, headers: outHeaders });
     }
 
     // 2. PIN unlock / lock endpoints
@@ -234,7 +260,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    const cortex = new BadSeedCortex();
+    const cortex = new BadSeedCortex(env.ADMIN_API_KEY || '');
     ctx.waitUntil(cortex.think());
   },
 };
